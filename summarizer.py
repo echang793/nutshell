@@ -2,10 +2,7 @@
 
 from __future__ import annotations
 
-import itertools
 import re
-import sys
-import threading
 import time
 from pathlib import Path
 
@@ -13,6 +10,14 @@ CACHE_DIR  = Path(__file__).parent / "data" / "transcripts"
 GROQ_MODEL = "llama-3.3-70b-versatile"
 
 _SYSTEM_PROMPT = (
+    "You are an expert note-taker and summarizer for YouTube video transcripts of any kind — "
+    "tutorials, lectures, podcasts, interviews, reviews, vlogs, and more. "
+    "Extract and organize the key information into clear, accurate notes. "
+    "Never invent information that is not in the transcript. "
+    "Format your response in clean markdown."
+)
+
+_STOCK_SYSTEM_PROMPT = (
     "You are an expert financial analyst and note-taker specializing in stock trading content. "
     "Extract and organize key information from YouTube transcripts into clear, actionable notes. "
     "Be precise with numbers, tickers, and price levels. "
@@ -21,6 +26,47 @@ _SYSTEM_PROMPT = (
 )
 
 _FULL_PROMPT = """\
+Analyze this YouTube video transcript and create structured notes.
+
+TRANSCRIPT:
+{transcript}
+
+Create notes with these exact sections:
+
+## Overview
+2-3 sentences summarizing what this video is about and who it's for.
+
+## Key Points
+5-10 bullets covering the main ideas, arguments, or steps, in the order presented.
+
+## Notable Quotes
+1-3 direct quotes worth remembering. If none stand out, write "None."
+
+## Topics & Terms
+Important names, tools, concepts, or terminology mentioned.
+
+## Takeaways
+3-5 bullet points of the most useful or actionable things a viewer should remember or do next.\
+"""
+
+_BRIEF_PROMPT = """\
+Analyze this YouTube video transcript and write a very short briefing.
+
+TRANSCRIPT:
+{transcript}
+
+Respond with ONLY these two sections (keep each tight):
+
+## Summary
+1-2 sentences — what this video covers.
+
+## Top Takeaways
+- Bullet 1
+- Bullet 2
+- Bullet 3\
+"""
+
+_STOCK_FULL_PROMPT = """\
 Analyze this YouTube video transcript and create structured trading notes.
 
 TRANSCRIPT:
@@ -54,8 +100,8 @@ Key risks or concerns mentioned by the presenter.
 2–3 sentences summarizing the whole video for someone who hasn't watched it.\
 """
 
-_BRIEF_PROMPT = """\
-Analyze this YouTube video transcript and write a very short briefing.
+_STOCK_BRIEF_PROMPT = """\
+Analyze this YouTube video transcript and write a very short trading briefing.
 
 TRANSCRIPT:
 {transcript}
@@ -86,6 +132,29 @@ TRANSCRIPT:
 def extract_video_id(url: str) -> str | None:
     match = re.search(r'(?:v=|youtu\.be/|shorts/|embed/)([a-zA-Z0-9_-]{11})', url)
     return match.group(1) if match else None
+
+
+def extract_playlist_id(url: str) -> str | None:
+    """Return playlist ID only for pure playlist URLs (not single-video-in-playlist)."""
+    if "watch" in url:
+        return None
+    match = re.search(r'[?&]list=([a-zA-Z0-9_-]+)', url)
+    return match.group(1) if match else None
+
+
+def get_playlist_video_ids(playlist_id: str) -> list[str]:
+    import subprocess
+    try:
+        result = subprocess.run(
+            ["yt-dlp", "--flat-playlist", "--print", "id",
+             f"https://www.youtube.com/playlist?list={playlist_id}"],
+            capture_output=True, text=True, check=True, timeout=60,
+        )
+        return [line.strip() for line in result.stdout.splitlines() if line.strip()]
+    except FileNotFoundError:
+        raise RuntimeError("Playlist support requires yt-dlp. Install: pip install yt-dlp")
+    except subprocess.CalledProcessError as e:
+        raise RuntimeError(f"yt-dlp failed: {e.stderr.strip()}")
 
 
 def fetch_transcript(video_id: str, api_key: str, model: str = GROQ_MODEL) -> tuple[str, bool]:
@@ -157,7 +226,7 @@ def _fetch_via_yt_api(video_id: str, api_key: str, model: str) -> str:
 
 
 def _call_groq(prompt: str, api_key: str, model: str, max_tokens: int = 2048,
-               retries: int = 2) -> str:
+               retries: int = 2, system_prompt: str = _SYSTEM_PROMPT) -> str:
     from groq import Groq, APIConnectionError, APIStatusError
 
     client = Groq(api_key=api_key)
@@ -166,7 +235,7 @@ def _call_groq(prompt: str, api_key: str, model: str, max_tokens: int = 2048,
             resp = client.chat.completions.create(
                 model=model,
                 messages=[
-                    {"role": "system", "content": _SYSTEM_PROMPT},
+                    {"role": "system", "content": system_prompt},
                     {"role": "user",   "content": prompt},
                 ],
                 temperature=0.1,
@@ -181,31 +250,16 @@ def _call_groq(prompt: str, api_key: str, model: str, max_tokens: int = 2048,
 
 
 def summarize(transcript: str, api_key: str, model: str = GROQ_MODEL,
-              brief: bool = False) -> str:
+              brief: bool = False, mode: str = "general") -> str:
     if len(transcript) > 80_000:
         transcript = transcript[:80_000] + "\n[transcript truncated]"
-    prompt = (_BRIEF_PROMPT if brief else _FULL_PROMPT).format(transcript=transcript)
-    return _call_groq(prompt, api_key, model)
+    if mode == "stock":
+        template      = _STOCK_BRIEF_PROMPT if brief else _STOCK_FULL_PROMPT
+        system_prompt = _STOCK_SYSTEM_PROMPT
+    else:
+        template      = _BRIEF_PROMPT if brief else _FULL_PROMPT
+        system_prompt = _SYSTEM_PROMPT
+    prompt = template.format(transcript=transcript)
+    return _call_groq(prompt, api_key, model, system_prompt=system_prompt)
 
 
-def extract_tickers_from_notes(notes_text: str) -> list[dict]:
-    """Parse tickers and sentiment from structured notes markdown."""
-    results = []
-    ticker_re = re.compile(
-        r'\*\*\$([A-Z]{1,5})[^*]*\*\*[^:]*:\s*(Bullish|Bearish|Neutral)',
-        re.IGNORECASE,
-    )
-    for m in ticker_re.finditer(notes_text):
-        results.append({
-            "ticker":    m.group(1).upper(),
-            "sentiment": m.group(2).lower(),
-        })
-    # Also catch bare $TICKER not in structured block
-    bare_re  = re.compile(r'\$([A-Z]{2,5})\b')
-    found    = {r["ticker"] for r in results}
-    for m in bare_re.finditer(notes_text):
-        t = m.group(1).upper()
-        if t not in found:
-            results.append({"ticker": t, "sentiment": "neutral"})
-            found.add(t)
-    return results

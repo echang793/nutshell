@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Nutshell — Trading Video Summarizer</title>
+  <title>Nutshell — YouTube Video Summarizer</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
   <style>
@@ -28,17 +28,13 @@
   <header class="border-b border-slate-800 px-6 py-4 flex items-center justify-between">
     <div>
       <h1 class="text-lg font-bold text-sky-400">Nutshell</h1>
-      <p class="text-xs text-slate-500">Trading video summarizer</p>
+      <p class="text-xs text-slate-500">AI summaries for any YouTube video</p>
     </div>
     <nav class="flex items-center gap-4 text-sm">
       <button onclick="showTab('summarize')" id="tab-summarize"
         class="tab-btn text-sky-400 border-b border-sky-400 pb-1">Summarize</button>
       <button onclick="showTab('history')" id="tab-history"
         class="tab-btn text-slate-500 hover:text-slate-300 pb-1">History</button>
-      <button onclick="showTab('tickers')" id="tab-tickers"
-        class="tab-btn text-slate-500 hover:text-slate-300 pb-1">Tickers</button>
-      <button onclick="showTab('watchlist')" id="tab-watchlist"
-        class="tab-btn text-slate-500 hover:text-slate-300 pb-1 hidden">Watchlist</button>
       <!-- Auth buttons -->
       <div id="auth-logged-out" class="flex gap-2">
         <button onclick="openModal('login-modal')"
@@ -61,13 +57,25 @@
     <!-- ── SUMMARIZE TAB ── -->
     <div id="tab-summarize-content">
       <div class="bg-slate-900 border border-slate-700 rounded-xl p-6 mb-6">
+        <label class="block text-sm text-slate-400 mb-2">Summary type</label>
+        <div id="mode-toggle" class="inline-flex bg-slate-800 border border-slate-700 rounded-lg p-1 mb-4">
+          <button type="button" onclick="setMode('general')" id="mode-general"
+            class="mode-btn px-3 py-1.5 rounded-md text-xs font-medium bg-sky-600 text-white">
+            General
+          </button>
+          <button type="button" onclick="setMode('stock')" id="mode-stock"
+            class="mode-btn px-3 py-1.5 rounded-md text-xs font-medium text-slate-400 hover:text-slate-200">
+            Stock
+          </button>
+        </div>
         <label class="block text-sm text-slate-400 mb-2">YouTube URL</label>
         <input id="url-input" type="text"
           placeholder="https://www.youtube.com/watch?v=..."
+          oninput="onUrlInput()"
           class="w-full bg-slate-800 border border-slate-600 rounded-lg px-4 py-3 text-sm
                  focus:outline-none focus:border-sky-500 placeholder-slate-600 mb-4" />
 
-        <div class="flex items-center gap-4">
+        <div class="flex items-center gap-4 flex-wrap">
           <button onclick="doSummarize(false)"
             class="bg-sky-600 hover:bg-sky-500 text-white px-5 py-2 rounded-lg text-sm font-medium transition">
             Full Notes
@@ -75,6 +83,10 @@
           <button onclick="doSummarize(true)"
             class="bg-slate-700 hover:bg-slate-600 text-white px-5 py-2 rounded-lg text-sm font-medium transition">
             Brief TL;DR
+          </button>
+          <button id="playlist-btn" onclick="doPlaylist()"
+            class="hidden bg-violet-700 hover:bg-violet-600 text-white px-5 py-2 rounded-lg text-sm font-medium transition">
+            Summarize Playlist
           </button>
           <span id="word-count" class="text-xs text-slate-500 ml-auto hidden"></span>
         </div>
@@ -121,60 +133,22 @@
 
       <!-- Results -->
       <div id="result-box" class="hidden">
-        <div id="ticker-tags" class="flex flex-wrap gap-2 mb-4"></div>
         <div class="bg-slate-900 border border-slate-700 rounded-xl p-6">
           <div id="notes-content" class="prose text-sm text-slate-300"></div>
         </div>
         <p class="text-xs text-slate-600 mt-2" id="result-meta"></p>
+      </div>
+
+      <!-- Playlist Results -->
+      <div id="playlist-box" class="hidden">
+        <p id="playlist-status" class="text-sm text-slate-400 mb-4"></p>
+        <div id="playlist-results" class="space-y-3"></div>
       </div>
     </div>
 
     <!-- ── HISTORY TAB ── -->
     <div id="tab-history-content" class="hidden">
       <div id="history-list" class="space-y-3"></div>
-    </div>
-
-    <!-- ── TICKERS TAB ── -->
-    <div id="tab-tickers-content" class="hidden">
-      <div class="bg-slate-900 border border-slate-700 rounded-xl overflow-hidden">
-        <table class="w-full text-sm">
-          <thead>
-            <tr class="border-b border-slate-700 text-slate-500 text-xs uppercase">
-              <th class="text-left px-4 py-3">Ticker</th>
-              <th class="text-right px-4 py-3">Mentions</th>
-              <th class="text-right px-4 py-3 text-green-500">Bull</th>
-              <th class="text-right px-4 py-3 text-red-500">Bear</th>
-              <th class="text-right px-4 py-3 text-slate-500">Neut</th>
-            </tr>
-          </thead>
-          <tbody id="tickers-table"></tbody>
-        </table>
-        <p id="tickers-empty" class="text-slate-600 text-sm px-4 py-6 hidden">
-          No ticker data yet — summarize some videos first.
-        </p>
-      </div>
-    </div>
-
-    <!-- ── WATCHLIST TAB ── -->
-    <div id="tab-watchlist-content" class="hidden">
-      <div class="bg-slate-900 border border-slate-700 rounded-xl p-6 mb-4">
-        <p class="text-sm text-slate-400 mb-3">
-          Get email alerts when a tracked ticker is mentioned in a new video summary.
-        </p>
-        <div class="flex gap-2">
-          <input id="watchlist-input" type="text" placeholder="AAPL"
-            class="bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 text-sm
-                   focus:outline-none focus:border-sky-500 placeholder-slate-600 w-32 uppercase" />
-          <button onclick="addTicker()"
-            class="bg-sky-600 hover:bg-sky-500 text-white px-4 py-2 rounded-lg text-sm">
-            Add
-          </button>
-        </div>
-      </div>
-      <div id="watchlist-tags" class="flex flex-wrap gap-2"></div>
-      <p id="watchlist-empty" class="text-slate-600 text-sm hidden">
-        No tickers on your watchlist yet.
-      </p>
     </div>
 
     <!-- ── ACCOUNT TAB ── -->
@@ -210,7 +184,6 @@
           <ul class="text-xs text-slate-400 space-y-1 mb-4">
             <li>5 lifetime summaries</li>
             <li>Full notes + TL;DR</li>
-            <li>Ticker extraction</li>
           </ul>
           <span id="free-badge" class="hidden text-xs text-slate-500">Current plan</span>
         </div>
@@ -221,7 +194,6 @@
           <ul class="text-xs text-slate-400 space-y-1 mb-4">
             <li>200 summaries / month</li>
             <li>Full notes + TL;DR</li>
-            <li>Ticker extraction</li>
             <li>Personal history</li>
           </ul>
           <button id="basic-btn" onclick="checkout('basic')"
@@ -237,9 +209,8 @@
           <ul class="text-xs text-slate-400 space-y-1 mb-4">
             <li>Unlimited summaries</li>
             <li>Full notes + TL;DR</li>
-            <li>Ticker extraction</li>
             <li>Personal history</li>
-            <li>Watchlist email alerts</li>
+            <li>Priority processing</li>
           </ul>
           <button id="pro-btn" onclick="checkout('pro')"
             class="w-full bg-violet-600 hover:bg-violet-500 text-white py-1.5 rounded-lg text-xs">
@@ -320,7 +291,7 @@
         </button>
         <button onclick="checkout('pro')"
           class="w-full bg-violet-600 hover:bg-violet-500 text-white py-2 rounded-lg text-sm">
-          Pro — $49/mo &nbsp;·&nbsp; Unlimited + watchlist alerts
+          Pro — $49/mo &nbsp;·&nbsp; Unlimited + priority processing
         </button>
       </div>
       <button onclick="closeModal('upgrade-modal')"
@@ -333,6 +304,17 @@
 <script>
 const API = '';
 let _user = null;
+let _mode = 'general';
+
+function setMode(mode) {
+  _mode = mode;
+  document.getElementById('mode-general').className =
+    'mode-btn px-3 py-1.5 rounded-md text-xs font-medium ' +
+    (mode === 'general' ? 'bg-sky-600 text-white' : 'text-slate-400 hover:text-slate-200');
+  document.getElementById('mode-stock').className =
+    'mode-btn px-3 py-1.5 rounded-md text-xs font-medium ' +
+    (mode === 'stock' ? 'bg-sky-600 text-white' : 'text-slate-400 hover:text-slate-200');
+}
 
 // ── Bootstrap ─────────────────────────────────────────────────────────
 async function init() {
@@ -375,8 +357,6 @@ function setUser(user) {
   document.getElementById('auth-logged-in').classList.remove('hidden');
   const plans = {free:'Free', basic:'Basic', pro:'Pro'};
   document.getElementById('plan-badge').textContent = plans[user.plan] || user.plan;
-  // Show watchlist tab only for pro
-  document.getElementById('tab-watchlist').classList.toggle('hidden', user.plan !== 'pro');
   updateUsageBar(user);
 }
 
@@ -384,7 +364,6 @@ function clearUser() {
   _user = null;
   document.getElementById('auth-logged-out').classList.remove('hidden');
   document.getElementById('auth-logged-in').classList.add('hidden');
-  document.getElementById('tab-watchlist').classList.add('hidden');
   document.getElementById('usage-bar-wrap').classList.add('hidden');
 }
 
@@ -402,7 +381,7 @@ function updateUsageBar(user) {
 
 // ── Tab switching ─────────────────────────────────────────────────────
 function showTab(name) {
-  ['summarize','history','tickers','watchlist','account'].forEach(t => {
+  ['summarize','history','account'].forEach(t => {
     const content = document.getElementById(`tab-${t}-content`);
     if (content) content.classList.add('hidden');
     const btn = document.getElementById(`tab-${t}`);
@@ -417,10 +396,8 @@ function showTab(name) {
     active.classList.remove('text-slate-500');
     active.classList.add('text-sky-400','border-b','border-sky-400');
   }
-  if (name === 'history')   loadHistory();
-  if (name === 'tickers')   loadTickers();
-  if (name === 'watchlist') loadWatchlist();
-  if (name === 'account')   renderAccount();
+  if (name === 'history') loadHistory();
+  if (name === 'account') renderAccount();
 }
 
 // ── Summarize ─────────────────────────────────────────────────────────
@@ -437,7 +414,7 @@ async function doSummarize(brief) {
     const res  = await fetch(`${API}/api/summarize`, {
       method: 'POST',
       headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({url, brief}),
+      body: JSON.stringify({url, brief, mode: _mode}),
     });
     const data = await res.json();
     if (res.status === 402) {
@@ -464,23 +441,95 @@ async function doSummarize(brief) {
   }
 }
 
-function showResult(data) {
-  const tags = document.getElementById('ticker-tags');
-  tags.innerHTML = '';
-  const seen = new Set();
-  (data.tickers || []).forEach(t => {
-    if (seen.has(t.ticker)) return;
-    seen.add(t.ticker);
-    const cls = t.sentiment === 'bullish' ? 'tag-bull' :
-                t.sentiment === 'bearish' ? 'tag-bear' : 'tag-neut';
-    const watchBtn = (_user && _user.plan === 'pro')
-      ? `<button onclick="addTickerDirect('${t.ticker}')" class="ml-1 opacity-50 hover:opacity-100 text-xs">+</button>`
-      : '';
-    tags.innerHTML += `<span class="px-2 py-0.5 rounded text-xs font-mono ${cls}">
-      $${t.ticker} <span class="opacity-60">${t.sentiment}</span>${watchBtn}
-    </span>`;
-  });
+// ── URL input detection ───────────────────────────────────────────────
+function onUrlInput() {
+  const url = document.getElementById('url-input').value.trim();
+  const isPlaylist = /[?&]list=/.test(url) && !/watch/.test(url);
+  document.getElementById('playlist-btn').classList.toggle('hidden', !isPlaylist);
+}
 
+// ── Playlist ──────────────────────────────────────────────────────────
+async function doPlaylist() {
+  const url = document.getElementById('url-input').value.trim();
+  if (!url) return;
+
+  document.getElementById('result-box').classList.add('hidden');
+  document.getElementById('playlist-box').classList.remove('hidden');
+  document.getElementById('playlist-results').innerHTML = '';
+  document.getElementById('playlist-status').textContent = 'Fetching playlist…';
+  document.getElementById('error-box').classList.add('hidden');
+
+  try {
+    const res = await fetch(`${API}/api/summarize/playlist`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({url, mode: _mode}),
+    });
+
+    if (!res.ok) {
+      const data = await res.json();
+      showError(data.detail || 'Playlist error');
+      document.getElementById('playlist-box').classList.add('hidden');
+      return;
+    }
+
+    const reader  = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+
+    while (true) {
+      const {done, value} = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, {stream: true});
+      const chunks = buffer.split('\n\n');
+      buffer = chunks.pop();
+      for (const chunk of chunks) {
+        if (!chunk.startsWith('data: ')) continue;
+        const msg = JSON.parse(chunk.slice(6));
+        if (msg.type === 'start') {
+          document.getElementById('playlist-status').textContent =
+            `Processing 0 / ${msg.total} videos…`;
+        } else if (msg.type === 'video') {
+          document.getElementById('playlist-status').textContent =
+            `Processing ${msg.index + 1} / ${msg.total} videos…`;
+          _appendPlaylistVideo(msg);
+        } else if (msg.type === 'error') {
+          _appendPlaylistError(msg);
+        } else if (msg.type === 'done') {
+          document.getElementById('playlist-status').textContent = 'Done.';
+        }
+      }
+    }
+  } catch(e) {
+    showError(e.message);
+    document.getElementById('playlist-box').classList.add('hidden');
+  }
+}
+
+function _appendPlaylistVideo(data) {
+  const thesis = extractThesis(data.notes);
+  const el = document.createElement('div');
+  el.className = 'bg-slate-900 border border-slate-700 rounded-xl p-4 cursor-pointer hover:border-sky-700 transition';
+  el.onclick = () => { showResult(data); showTab('summarize'); };
+  el.innerHTML = `
+    <p class="text-xs text-slate-500 mb-1">
+      Video ${data.index + 1} of ${data.total} · ${data.word_count?.toLocaleString()} words
+    </p>
+    <p class="text-sm text-slate-200">${thesis}</p>
+    <p class="text-xs text-slate-600 mt-1 truncate">${data.url}</p>`;
+  document.getElementById('playlist-results').appendChild(el);
+}
+
+function _appendPlaylistError(data) {
+  const el = document.createElement('div');
+  el.className = 'bg-red-950 border border-red-800 rounded-xl p-4';
+  el.innerHTML = `
+    <p class="text-xs text-red-400">Video ${data.index + 1}: ${data.error}</p>
+    <p class="text-xs text-slate-600">${data.url}</p>`;
+  document.getElementById('playlist-results').appendChild(el);
+}
+
+function showResult(data) {
   document.getElementById('notes-content').innerHTML = marked.parse(data.notes || '');
   document.getElementById('result-meta').textContent =
     `${data.word_count?.toLocaleString()} words · ${data.cached ? 'cached transcript' : 'fresh transcript'} · ID: ${data.id}`;
@@ -524,91 +573,6 @@ async function loadSummary(id) {
   document.getElementById('url-input').value = data.url;
   showResult(data);
   showTab('summarize');
-}
-
-// ── Tickers ───────────────────────────────────────────────────────────
-async function loadTickers() {
-  const tbody = document.getElementById('tickers-table');
-  const empty = document.getElementById('tickers-empty');
-  tbody.innerHTML = '';
-  try {
-    const rows = await fetch(`${API}/api/tickers`).then(r => r.json());
-    if (!rows.length) { empty.classList.remove('hidden'); return; }
-    empty.classList.add('hidden');
-    tbody.innerHTML = rows.map(r => `
-      <tr class="border-b border-slate-800 hover:bg-slate-800 transition">
-        <td class="px-4 py-2 font-mono font-bold text-sky-300">$${r.ticker}</td>
-        <td class="px-4 py-2 text-right text-slate-300">${r.count}</td>
-        <td class="px-4 py-2 text-right text-green-400">${r.bullish || '—'}</td>
-        <td class="px-4 py-2 text-right text-red-400">${r.bearish || '—'}</td>
-        <td class="px-4 py-2 text-right text-slate-500">${r.neutral || '—'}</td>
-      </tr>`).join('');
-  } catch(e) {
-    tbody.innerHTML = `<tr><td colspan="5" class="px-4 py-4 text-red-400 text-sm">${e.message}</td></tr>`;
-  }
-}
-
-// ── Watchlist ─────────────────────────────────────────────────────────
-let _watchlist = [];
-
-async function loadWatchlist() {
-  const container = document.getElementById('watchlist-tags');
-  const empty     = document.getElementById('watchlist-empty');
-  try {
-    const data = await fetch(`${API}/api/watchlist`).then(r => r.json());
-    _watchlist = data.tickers || [];
-    renderWatchlistTags();
-  } catch(e) {
-    container.innerHTML = `<p class="text-red-400 text-sm">${e.message}</p>`;
-  }
-}
-
-function renderWatchlistTags() {
-  const container = document.getElementById('watchlist-tags');
-  const empty     = document.getElementById('watchlist-empty');
-  if (!_watchlist.length) {
-    empty.classList.remove('hidden');
-    container.innerHTML = '';
-    return;
-  }
-  empty.classList.add('hidden');
-  container.innerHTML = _watchlist.map(t => `
-    <span class="flex items-center gap-1 px-2 py-1 rounded bg-slate-800 text-sky-300 text-xs font-mono">
-      $${t}
-      <button onclick="removeTicker('${t}')" class="text-slate-500 hover:text-red-400 ml-1">&times;</button>
-    </span>`).join('');
-}
-
-async function addTicker() {
-  const input  = document.getElementById('watchlist-input');
-  const ticker = input.value.trim().toUpperCase();
-  if (!ticker) return;
-  input.value = '';
-  await addTickerDirect(ticker);
-}
-
-async function addTickerDirect(ticker) {
-  try {
-    const data = await fetch(`${API}/api/watchlist`, {
-      method: 'POST',
-      headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({ticker}),
-    }).then(r => r.json());
-    _watchlist = data.tickers || [];
-    renderWatchlistTags();
-  } catch(e) {
-    alert(e.message);
-  }
-}
-
-async function removeTicker(ticker) {
-  try {
-    const data = await fetch(`${API}/api/watchlist/${ticker}`, {method:'DELETE'}).then(r => r.json());
-    _watchlist = data.tickers || [];
-    renderWatchlistTags();
-  } catch(e) {
-    alert(e.message);
-  }
 }
 
 // ── Account ───────────────────────────────────────────────────────────
@@ -727,7 +691,7 @@ function switchModal(from, to) {
 
 // ── Utilities ─────────────────────────────────────────────────────────
 function extractThesis(notes) {
-  const m = notes?.match(/## Thesis\s*\n+(.+)/);
+  const m = notes?.match(/## (?:Thesis|Overview|Summary)\s*\n+(.+)/);
   const t = m ? m[1].trim() : '—';
   return t.length > 100 ? t.slice(0,100) + '…' : t;
 }
@@ -764,9 +728,6 @@ document.addEventListener('DOMContentLoaded', () => {
   });
   document.getElementById('register-password').addEventListener('keydown', e => {
     if (e.key === 'Enter') doRegister();
-  });
-  document.getElementById('watchlist-input').addEventListener('keydown', e => {
-    if (e.key === 'Enter') addTicker();
   });
   init();
 });

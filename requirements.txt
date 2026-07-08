@@ -5,5 +5,5 @@ groq>=0.9
 python-multipart>=0.0.9
 bcrypt>=4.0
 stripe>=8.0
-resend>=0.8
 requests>=2.31
+yt-dlp>=2024.1

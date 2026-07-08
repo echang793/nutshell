@@ -6,13 +6,14 @@ import os
 import uuid
 from pathlib import Path
 
+import json as _json
+
 from fastapi import FastAPI, HTTPException, Request, Response
 from fastapi.concurrency import run_in_threadpool
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-import alerts
 import auth
 import db
 import payments
@@ -164,6 +165,7 @@ class SummarizeRequest(BaseModel):
     url:   str
     brief: bool = False
     model: str  = summarizer.GROQ_MODEL
+    mode:  str  = "general"  # "general" or "stock"
 
 
 @app.post("/api/summarize")
@@ -199,30 +201,23 @@ async def api_summarize(req: SummarizeRequest, request: Request, response: Respo
 
     word_count = len(transcript.split())
 
+    mode = req.mode if req.mode in ("general", "stock") else "general"
     try:
         notes = await run_in_threadpool(
-            summarizer.summarize, transcript, api_key, req.model, req.brief
+            summarizer.summarize, transcript, api_key, req.model, req.brief, mode
         )
     except RuntimeError as e:
         raise HTTPException(502, str(e))
 
-    tickers = summarizer.extract_tickers_from_notes(notes)
-    sid     = str(uuid.uuid4())[:8]
-    uid     = user["id"] if user else None
+    sid = str(uuid.uuid4())[:8]
+    uid = user["id"] if user else None
 
     await run_in_threadpool(
-        db.save_summary, sid, video_id, req.url, notes, req.brief, word_count, tickers, uid
+        db.save_summary, sid, video_id, req.url, notes, req.brief, word_count, uid
     )
 
     if uid:
         await run_in_threadpool(db.increment_summary_count, uid)
-
-    # Fire watchlist alerts in the background (non-blocking)
-    if tickers:
-        import asyncio
-        asyncio.create_task(
-            run_in_threadpool(alerts.send_watchlist_alerts, sid, req.url, tickers)
-        )
 
     return {
         "id":         sid,
@@ -232,7 +227,6 @@ async def api_summarize(req: SummarizeRequest, request: Request, response: Respo
         "brief":      req.brief,
         "word_count": word_count,
         "cached":     cached,
-        "tickers":    tickers,
     }
 
 
@@ -249,11 +243,6 @@ def api_history(request: Request, limit: int = 50):
     user = _current_user(request)
     uid  = user["id"] if user else None
     return db.get_history(limit, user_id=uid)
-
-
-@app.get("/api/tickers")
-def api_tickers():
-    return db.get_ticker_tally()
 
 
 # ── Payments ──────────────────────────────────────────────────────────
@@ -297,39 +286,68 @@ async def api_webhook(request: Request):
     return {"ok": True}
 
 
-# ── Watchlist ─────────────────────────────────────────────────────────
+# ── Playlist ──────────────────────────────────────────────────────────
 
-@app.get("/api/watchlist")
-def api_get_watchlist(request: Request):
-    user = _require_user(request)
-    if user["plan"] != "pro":
-        raise HTTPException(403, "Watchlist is a Pro plan feature.")
-    return {"tickers": db.get_watchlist(user["id"])}
-
-
-class WatchlistRequest(BaseModel):
-    ticker: str
+class PlaylistRequest(BaseModel):
+    url:   str
+    brief: bool = False
+    model: str  = summarizer.GROQ_MODEL
+    mode:  str  = "general"  # "general" or "stock"
 
 
-@app.post("/api/watchlist")
-def api_add_watchlist(req: WatchlistRequest, request: Request):
-    user = _require_user(request)
-    if user["plan"] != "pro":
-        raise HTTPException(403, "Watchlist is a Pro plan feature.")
-    ticker = req.ticker.strip().upper()
-    if not ticker or len(ticker) > 10:
-        raise HTTPException(400, "Invalid ticker symbol.")
-    db.add_to_watchlist(user["id"], ticker)
-    return {"tickers": db.get_watchlist(user["id"])}
+@app.post("/api/summarize/playlist")
+async def api_summarize_playlist(req: PlaylistRequest, request: Request):
+    user    = _current_user(request)
+    api_key = _get_api_key()
+    mode    = req.mode if req.mode in ("general", "stock") else "general"
 
+    playlist_id = summarizer.extract_playlist_id(req.url)
+    if not playlist_id:
+        raise HTTPException(400, "Not a playlist URL — use a youtube.com/playlist?list=... URL.")
 
-@app.delete("/api/watchlist/{ticker}")
-def api_remove_watchlist(ticker: str, request: Request):
-    user = _require_user(request)
-    if user["plan"] != "pro":
-        raise HTTPException(403, "Watchlist is a Pro plan feature.")
-    db.remove_from_watchlist(user["id"], ticker.upper())
-    return {"tickers": db.get_watchlist(user["id"])}
+    try:
+        video_ids = await run_in_threadpool(summarizer.get_playlist_video_ids, playlist_id)
+    except RuntimeError as e:
+        raise HTTPException(400, str(e))
+
+    if not video_ids:
+        raise HTTPException(400, "No videos found in playlist.")
+
+    async def generate():
+        yield f"data: {_json.dumps({'type': 'start', 'total': len(video_ids)})}\n\n"
+        for i, vid in enumerate(video_ids):
+            vid_url = f"https://www.youtube.com/watch?v={vid}"
+            try:
+                transcript, cached = await run_in_threadpool(
+                    summarizer.fetch_transcript, vid, api_key, req.model
+                )
+                notes   = await run_in_threadpool(
+                    summarizer.summarize, transcript, api_key, req.model, req.brief, mode
+                )
+                sid     = str(uuid.uuid4())[:8]
+                uid     = user["id"] if user else None
+                await run_in_threadpool(
+                    db.save_summary, sid, vid, vid_url, notes, req.brief,
+                    len(transcript.split()), uid
+                )
+                if uid:
+                    await run_in_threadpool(db.increment_summary_count, uid)
+                payload = {
+                    "type": "video", "index": i, "total": len(video_ids),
+                    "id": sid, "video_id": vid, "url": vid_url,
+                    "notes": notes,
+                    "word_count": len(transcript.split()),
+                }
+                yield f"data: {_json.dumps(payload)}\n\n"
+            except Exception as e:
+                yield f"data: {_json.dumps({'type': 'error', 'index': i, 'video_id': vid, 'url': vid_url, 'error': str(e)})}\n\n"
+        yield f"data: {_json.dumps({'type': 'done'})}\n\n"
+
+    return StreamingResponse(
+        generate(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
 
 
 if __name__ == "__main__":
