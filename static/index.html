@@ -13,13 +13,8 @@
     .prose li { margin: 0.25rem 0; }
     .prose strong { color: #f0f9ff; }
     .prose p { margin: 0.4rem 0; line-height: 1.6; }
-    .tag-bull { background:#14532d; color:#86efac; }
-    .tag-bear { background:#450a0a; color:#fca5a5; }
-    .tag-neut { background:#1e293b; color:#94a3b8; }
-    #spinner { display:none; }
-    #spinner.active { display:flex; }
-    .modal-bg { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.7); z-index:50; align-items:center; justify-content:center; }
-    .modal-bg.open { display:flex; }
+    #spinner-general.active, #spinner-financial.active { display:flex; }
+    #spinner-general, #spinner-financial { display:none; }
   </style>
 </head>
 <body class="min-h-screen font-mono">
@@ -31,118 +26,119 @@
       <p class="text-xs text-slate-500">AI summaries for any YouTube video</p>
     </div>
     <nav class="flex items-center gap-4 text-sm">
-      <button onclick="showTab('summarize')" id="tab-summarize"
-        class="tab-btn text-sky-400 border-b border-sky-400 pb-1">Summarize</button>
+      <button onclick="showTab('general')" id="tab-general"
+        class="tab-btn text-sky-400 border-b border-sky-400 pb-1">General</button>
+      <button onclick="showTab('financial')" id="tab-financial"
+        class="tab-btn text-slate-500 hover:text-slate-300 pb-1">Financial</button>
       <button onclick="showTab('history')" id="tab-history"
         class="tab-btn text-slate-500 hover:text-slate-300 pb-1">History</button>
-      <!-- Auth buttons -->
-      <div id="auth-logged-out" class="flex gap-2">
-        <button onclick="openModal('login-modal')"
-          class="text-slate-400 hover:text-slate-200 pb-1">Log in</button>
-        <button onclick="openModal('register-modal')"
-          class="bg-sky-600 hover:bg-sky-500 text-white px-3 py-1 rounded-lg text-sm">Sign up</button>
-      </div>
-      <div id="auth-logged-in" class="hidden flex items-center gap-3">
-        <span id="plan-badge" class="text-xs px-2 py-0.5 rounded bg-slate-700 text-slate-300"></span>
-        <button onclick="showTab('account')" id="tab-account"
-          class="tab-btn text-slate-500 hover:text-slate-300 pb-1">Account</button>
-        <button onclick="doLogout()"
-          class="text-slate-500 hover:text-slate-300 text-xs">Sign out</button>
-      </div>
     </nav>
   </header>
 
   <main class="max-w-4xl mx-auto px-4 py-8">
 
-    <!-- ── SUMMARIZE TAB ── -->
-    <div id="tab-summarize-content">
+    <!-- Supadata monthly quota (shared, mode-agnostic) -->
+    <div id="quota-line" class="mb-4 text-xs text-slate-600 hidden">
+      <span id="quota-text"></span>
+    </div>
+
+    <!-- ── GENERAL TAB ── -->
+    <div id="tab-general-content">
       <div class="bg-slate-900 border border-slate-700 rounded-xl p-6 mb-6">
-        <label class="block text-sm text-slate-400 mb-2">Summary type</label>
-        <div id="mode-toggle" class="inline-flex bg-slate-800 border border-slate-700 rounded-lg p-1 mb-4">
-          <button type="button" onclick="setMode('general')" id="mode-general"
-            class="mode-btn px-3 py-1.5 rounded-md text-xs font-medium bg-sky-600 text-white">
-            General
-          </button>
-          <button type="button" onclick="setMode('stock')" id="mode-stock"
-            class="mode-btn px-3 py-1.5 rounded-md text-xs font-medium text-slate-400 hover:text-slate-200">
-            Stock
-          </button>
-        </div>
         <label class="block text-sm text-slate-400 mb-2">YouTube URL</label>
-        <input id="url-input" type="text"
+        <input id="url-input-general" type="text"
           placeholder="https://www.youtube.com/watch?v=..."
-          oninput="onUrlInput()"
+          oninput="onUrlInput('general')"
           class="w-full bg-slate-800 border border-slate-600 rounded-lg px-4 py-3 text-sm
                  focus:outline-none focus:border-sky-500 placeholder-slate-600 mb-4" />
 
         <div class="flex items-center gap-4 flex-wrap">
-          <button onclick="doSummarize(false)"
+          <button onclick="doSummarize('general', false)"
             class="bg-sky-600 hover:bg-sky-500 text-white px-5 py-2 rounded-lg text-sm font-medium transition">
             Full Notes
           </button>
-          <button onclick="doSummarize(true)"
+          <button onclick="doSummarize('general', true)"
             class="bg-slate-700 hover:bg-slate-600 text-white px-5 py-2 rounded-lg text-sm font-medium transition">
             Brief TL;DR
           </button>
-          <button id="playlist-btn" onclick="doPlaylist()"
+          <button id="playlist-btn-general" onclick="doPlaylist('general')"
             class="hidden bg-violet-700 hover:bg-violet-600 text-white px-5 py-2 rounded-lg text-sm font-medium transition">
             Summarize Playlist
           </button>
-          <span id="word-count" class="text-xs text-slate-500 ml-auto hidden"></span>
-        </div>
-
-        <!-- Supadata monthly quota -->
-        <div id="quota-line" class="mt-3 text-xs text-slate-600 hidden">
-          <span id="quota-text"></span>
-        </div>
-
-        <!-- Usage bar for logged-in users -->
-        <div id="usage-bar-wrap" class="mt-4 hidden">
-          <div class="flex justify-between text-xs text-slate-500 mb-1">
-            <span id="usage-label">Usage</span>
-            <span id="usage-fraction"></span>
-          </div>
-          <div class="bg-slate-800 rounded-full h-1.5">
-            <div id="usage-fill" class="bg-sky-500 h-1.5 rounded-full transition-all" style="width:0%"></div>
-          </div>
         </div>
       </div>
 
-      <!-- Spinner -->
-      <div id="spinner" class="items-center gap-3 text-slate-400 text-sm mb-6 hidden">
+      <div id="spinner-general" class="items-center gap-3 text-slate-400 text-sm mb-6 hidden">
         <svg class="animate-spin h-5 w-5 text-sky-500" fill="none" viewBox="0 0 24 24">
           <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
           <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/>
         </svg>
-        <span id="spinner-msg">Fetching transcript...</span>
+        <span id="spinner-msg-general">Fetching transcript...</span>
       </div>
 
-      <!-- Error -->
-      <div id="error-box" class="hidden bg-red-950 border border-red-800 text-red-300
-                                  rounded-lg px-4 py-3 text-sm mb-6"></div>
+      <div id="error-box-general" class="hidden bg-red-950 border border-red-800 text-red-300
+                                          rounded-lg px-4 py-3 text-sm mb-6"></div>
 
-      <!-- Upgrade nudge -->
-      <div id="upgrade-box" class="hidden bg-sky-950 border border-sky-700 text-sky-300
-                                    rounded-lg px-4 py-3 text-sm mb-6 flex items-center justify-between">
-        <span id="upgrade-msg"></span>
-        <button onclick="openModal('upgrade-modal')"
-          class="ml-4 bg-sky-600 hover:bg-sky-500 text-white px-3 py-1 rounded-lg text-xs shrink-0">
-          Upgrade
-        </button>
-      </div>
-
-      <!-- Results -->
-      <div id="result-box" class="hidden">
+      <div id="result-box-general" class="hidden">
         <div class="bg-slate-900 border border-slate-700 rounded-xl p-6">
-          <div id="notes-content" class="prose text-sm text-slate-300"></div>
+          <div id="notes-content-general" class="prose text-sm text-slate-300"></div>
         </div>
-        <p class="text-xs text-slate-600 mt-2" id="result-meta"></p>
+        <p class="text-xs text-slate-600 mt-2" id="result-meta-general"></p>
       </div>
 
-      <!-- Playlist Results -->
-      <div id="playlist-box" class="hidden">
-        <p id="playlist-status" class="text-sm text-slate-400 mb-4"></p>
-        <div id="playlist-results" class="space-y-3"></div>
+      <div id="playlist-box-general" class="hidden">
+        <p id="playlist-status-general" class="text-sm text-slate-400 mb-4"></p>
+        <div id="playlist-results-general" class="space-y-3"></div>
+      </div>
+    </div>
+
+    <!-- ── FINANCIAL TAB ── -->
+    <div id="tab-financial-content" class="hidden">
+      <div class="bg-slate-900 border border-slate-700 rounded-xl p-6 mb-6">
+        <label class="block text-sm text-slate-400 mb-2">YouTube URL</label>
+        <input id="url-input-financial" type="text"
+          placeholder="https://www.youtube.com/watch?v=..."
+          oninput="onUrlInput('financial')"
+          class="w-full bg-slate-800 border border-slate-600 rounded-lg px-4 py-3 text-sm
+                 focus:outline-none focus:border-sky-500 placeholder-slate-600 mb-4" />
+
+        <div class="flex items-center gap-4 flex-wrap">
+          <button onclick="doSummarize('financial', false)"
+            class="bg-sky-600 hover:bg-sky-500 text-white px-5 py-2 rounded-lg text-sm font-medium transition">
+            Full Notes
+          </button>
+          <button onclick="doSummarize('financial', true)"
+            class="bg-slate-700 hover:bg-slate-600 text-white px-5 py-2 rounded-lg text-sm font-medium transition">
+            Brief TL;DR
+          </button>
+          <button id="playlist-btn-financial" onclick="doPlaylist('financial')"
+            class="hidden bg-violet-700 hover:bg-violet-600 text-white px-5 py-2 rounded-lg text-sm font-medium transition">
+            Summarize Playlist
+          </button>
+        </div>
+      </div>
+
+      <div id="spinner-financial" class="items-center gap-3 text-slate-400 text-sm mb-6 hidden">
+        <svg class="animate-spin h-5 w-5 text-sky-500" fill="none" viewBox="0 0 24 24">
+          <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
+          <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/>
+        </svg>
+        <span id="spinner-msg-financial">Fetching transcript...</span>
+      </div>
+
+      <div id="error-box-financial" class="hidden bg-red-950 border border-red-800 text-red-300
+                                            rounded-lg px-4 py-3 text-sm mb-6"></div>
+
+      <div id="result-box-financial" class="hidden">
+        <div class="bg-slate-900 border border-slate-700 rounded-xl p-6">
+          <div id="notes-content-financial" class="prose text-sm text-slate-300"></div>
+        </div>
+        <p class="text-xs text-slate-600 mt-2" id="result-meta-financial"></p>
+      </div>
+
+      <div id="playlist-box-financial" class="hidden">
+        <p id="playlist-status-financial" class="text-sm text-slate-400 mb-4"></p>
+        <div id="playlist-results-financial" class="space-y-3"></div>
       </div>
     </div>
 
@@ -151,179 +147,14 @@
       <div id="history-list" class="space-y-3"></div>
     </div>
 
-    <!-- ── ACCOUNT TAB ── -->
-    <div id="tab-account-content" class="hidden">
-      <div class="bg-slate-900 border border-slate-700 rounded-xl p-6 mb-4">
-        <h2 class="text-sky-400 font-bold mb-4">Account</h2>
-        <div class="space-y-2 text-sm">
-          <div class="flex justify-between">
-            <span class="text-slate-500">Email</span>
-            <span id="account-email" class="text-slate-200"></span>
-          </div>
-          <div class="flex justify-between">
-            <span class="text-slate-500">Plan</span>
-            <span id="account-plan" class="text-slate-200 capitalize"></span>
-          </div>
-          <div class="flex justify-between">
-            <span class="text-slate-500">Total summaries</span>
-            <span id="account-total" class="text-slate-200"></span>
-          </div>
-          <div class="flex justify-between" id="account-monthly-row">
-            <span class="text-slate-500">This month</span>
-            <span id="account-monthly" class="text-slate-200"></span>
-          </div>
-        </div>
-      </div>
-
-      <!-- Plan cards -->
-      <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-4">
-        <!-- Free -->
-        <div class="bg-slate-900 border border-slate-700 rounded-xl p-5">
-          <h3 class="font-bold text-slate-200 mb-1">Free</h3>
-          <p class="text-2xl font-bold text-white mb-3">$0</p>
-          <ul class="text-xs text-slate-400 space-y-1 mb-4">
-            <li>5 lifetime summaries</li>
-            <li>Full notes + TL;DR</li>
-          </ul>
-          <span id="free-badge" class="hidden text-xs text-slate-500">Current plan</span>
-        </div>
-        <!-- Basic -->
-        <div class="bg-slate-900 border border-sky-800 rounded-xl p-5">
-          <h3 class="font-bold text-sky-300 mb-1">Basic</h3>
-          <p class="text-2xl font-bold text-white mb-3">$19<span class="text-sm font-normal text-slate-400">/mo</span></p>
-          <ul class="text-xs text-slate-400 space-y-1 mb-4">
-            <li>200 summaries / month</li>
-            <li>Full notes + TL;DR</li>
-            <li>Personal history</li>
-          </ul>
-          <button id="basic-btn" onclick="checkout('basic')"
-            class="w-full bg-sky-600 hover:bg-sky-500 text-white py-1.5 rounded-lg text-xs">
-            Upgrade to Basic
-          </button>
-          <span id="basic-badge" class="hidden text-xs text-slate-500">Current plan</span>
-        </div>
-        <!-- Pro -->
-        <div class="bg-slate-900 border border-violet-800 rounded-xl p-5">
-          <h3 class="font-bold text-violet-300 mb-1">Pro</h3>
-          <p class="text-2xl font-bold text-white mb-3">$49<span class="text-sm font-normal text-slate-400">/mo</span></p>
-          <ul class="text-xs text-slate-400 space-y-1 mb-4">
-            <li>Unlimited summaries</li>
-            <li>Full notes + TL;DR</li>
-            <li>Personal history</li>
-            <li>Priority processing</li>
-          </ul>
-          <button id="pro-btn" onclick="checkout('pro')"
-            class="w-full bg-violet-600 hover:bg-violet-500 text-white py-1.5 rounded-lg text-xs">
-            Upgrade to Pro
-          </button>
-          <span id="pro-badge" class="hidden text-xs text-slate-500">Current plan</span>
-        </div>
-      </div>
-
-      <!-- Manage billing -->
-      <button id="billing-btn" onclick="managePortal()"
-        class="hidden text-sm text-sky-400 hover:text-sky-300">
-        Manage billing &rarr;
-      </button>
-    </div>
-
   </main>
-
-  <!-- ── LOGIN MODAL ── -->
-  <div id="login-modal" class="modal-bg" onclick="closeModalOutside(event,'login-modal')">
-    <div class="bg-slate-900 border border-slate-700 rounded-xl p-6 w-full max-w-sm mx-4">
-      <h2 class="text-sky-400 font-bold mb-4">Log in</h2>
-      <div id="login-error" class="hidden text-red-400 text-xs mb-3"></div>
-      <label class="block text-xs text-slate-500 mb-1">Email</label>
-      <input id="login-email" type="email" autocomplete="email"
-        class="w-full bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 text-sm mb-3
-               focus:outline-none focus:border-sky-500" />
-      <label class="block text-xs text-slate-500 mb-1">Password</label>
-      <input id="login-password" type="password" autocomplete="current-password"
-        class="w-full bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 text-sm mb-4
-               focus:outline-none focus:border-sky-500" />
-      <button onclick="doLogin()"
-        class="w-full bg-sky-600 hover:bg-sky-500 text-white py-2 rounded-lg text-sm">
-        Log in
-      </button>
-      <p class="text-xs text-slate-500 mt-3 text-center">
-        No account?
-        <button onclick="switchModal('login-modal','register-modal')"
-          class="text-sky-400 hover:text-sky-300">Sign up</button>
-      </p>
-    </div>
-  </div>
-
-  <!-- ── REGISTER MODAL ── -->
-  <div id="register-modal" class="modal-bg" onclick="closeModalOutside(event,'register-modal')">
-    <div class="bg-slate-900 border border-slate-700 rounded-xl p-6 w-full max-w-sm mx-4">
-      <h2 class="text-sky-400 font-bold mb-4">Create account</h2>
-      <div id="register-error" class="hidden text-red-400 text-xs mb-3"></div>
-      <label class="block text-xs text-slate-500 mb-1">Email</label>
-      <input id="register-email" type="email" autocomplete="email"
-        class="w-full bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 text-sm mb-3
-               focus:outline-none focus:border-sky-500" />
-      <label class="block text-xs text-slate-500 mb-1">Password <span class="text-slate-600">(min 8 chars)</span></label>
-      <input id="register-password" type="password" autocomplete="new-password"
-        class="w-full bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 text-sm mb-4
-               focus:outline-none focus:border-sky-500" />
-      <button onclick="doRegister()"
-        class="w-full bg-sky-600 hover:bg-sky-500 text-white py-2 rounded-lg text-sm">
-        Create account
-      </button>
-      <p class="text-xs text-slate-500 mt-3 text-center">
-        Already have an account?
-        <button onclick="switchModal('register-modal','login-modal')"
-          class="text-sky-400 hover:text-sky-300">Log in</button>
-      </p>
-    </div>
-  </div>
-
-  <!-- ── UPGRADE MODAL ── -->
-  <div id="upgrade-modal" class="modal-bg" onclick="closeModalOutside(event,'upgrade-modal')">
-    <div class="bg-slate-900 border border-slate-700 rounded-xl p-6 w-full max-w-sm mx-4">
-      <h2 class="text-sky-400 font-bold mb-2">Upgrade your plan</h2>
-      <p class="text-xs text-slate-400 mb-4">You've reached your current plan limit.</p>
-      <div class="space-y-3">
-        <button onclick="checkout('basic')"
-          class="w-full bg-sky-600 hover:bg-sky-500 text-white py-2 rounded-lg text-sm">
-          Basic — $19/mo &nbsp;·&nbsp; 200 summaries/month
-        </button>
-        <button onclick="checkout('pro')"
-          class="w-full bg-violet-600 hover:bg-violet-500 text-white py-2 rounded-lg text-sm">
-          Pro — $49/mo &nbsp;·&nbsp; Unlimited + priority processing
-        </button>
-      </div>
-      <button onclick="closeModal('upgrade-modal')"
-        class="w-full mt-3 text-slate-500 hover:text-slate-300 text-xs py-1">
-        Not now
-      </button>
-    </div>
-  </div>
 
 <script>
 const API = '';
-let _user = null;
-let _mode = 'general';
-
-function setMode(mode) {
-  _mode = mode;
-  document.getElementById('mode-general').className =
-    'mode-btn px-3 py-1.5 rounded-md text-xs font-medium ' +
-    (mode === 'general' ? 'bg-sky-600 text-white' : 'text-slate-400 hover:text-slate-200');
-  document.getElementById('mode-stock').className =
-    'mode-btn px-3 py-1.5 rounded-md text-xs font-medium ' +
-    (mode === 'stock' ? 'bg-sky-600 text-white' : 'text-slate-400 hover:text-slate-200');
-}
+const MODE_FOR_TAB = { general: 'general', financial: 'stock' };
 
 // ── Bootstrap ─────────────────────────────────────────────────────────
 async function init() {
-  try {
-    const res  = await fetch(`${API}/api/auth/me`);
-    const data = await res.json();
-    if (data.user) setUser(data.user);
-  } catch(_) {}
-
   // Supadata quota
   try {
     const q = await fetch(`${API}/api/quota`).then(r => r.json());
@@ -339,49 +170,16 @@ async function init() {
   const params = new URLSearchParams(location.search);
   if (params.has('summary')) {
     const data = await fetch(`${API}/api/summaries/${params.get('summary')}`).then(r => r.json()).catch(() => null);
-    if (data) { showResult(data); document.getElementById('url-input').value = data.url; }
+    if (data) {
+      showResult('general', data);
+      document.getElementById('url-input-general').value = data.url;
+    }
   }
-  // Stripe checkout success
-  if (params.get('checkout') === 'success') {
-    history.replaceState({}, '', '/');
-    const res  = await fetch(`${API}/api/auth/me`);
-    const data = await res.json();
-    if (data.user) setUser(data.user);
-    showTab('account');
-  }
-}
-
-function setUser(user) {
-  _user = user;
-  document.getElementById('auth-logged-out').classList.add('hidden');
-  document.getElementById('auth-logged-in').classList.remove('hidden');
-  const plans = {free:'Free', basic:'Basic', pro:'Pro'};
-  document.getElementById('plan-badge').textContent = plans[user.plan] || user.plan;
-  updateUsageBar(user);
-}
-
-function clearUser() {
-  _user = null;
-  document.getElementById('auth-logged-out').classList.remove('hidden');
-  document.getElementById('auth-logged-in').classList.add('hidden');
-  document.getElementById('usage-bar-wrap').classList.add('hidden');
-}
-
-function updateUsageBar(user) {
-  const wrap = document.getElementById('usage-bar-wrap');
-  if (!user || user.plan === 'pro') { wrap.classList.add('hidden'); return; }
-  const limit = user.plan === 'basic' ? 200 : 5;
-  const count = user.plan === 'basic' ? user.monthly_count : user.summary_count;
-  wrap.classList.remove('hidden');
-  document.getElementById('usage-label').textContent =
-    user.plan === 'basic' ? 'Monthly summaries' : 'Lifetime summaries';
-  document.getElementById('usage-fraction').textContent = `${count} / ${limit}`;
-  document.getElementById('usage-fill').style.width = `${Math.min(100, count / limit * 100)}%`;
 }
 
 // ── Tab switching ─────────────────────────────────────────────────────
 function showTab(name) {
-  ['summarize','history','account'].forEach(t => {
+  ['general','financial','history'].forEach(t => {
     const content = document.getElementById(`tab-${t}-content`);
     if (content) content.classList.add('hidden');
     const btn = document.getElementById(`tab-${t}`);
@@ -397,79 +195,64 @@ function showTab(name) {
     active.classList.add('text-sky-400','border-b','border-sky-400');
   }
   if (name === 'history') loadHistory();
-  if (name === 'account') renderAccount();
 }
 
 // ── Summarize ─────────────────────────────────────────────────────────
-async function doSummarize(brief) {
-  const url = document.getElementById('url-input').value.trim();
+async function doSummarize(tab, brief) {
+  const url = document.getElementById(`url-input-${tab}`).value.trim();
   if (!url) return;
+  const mode = MODE_FOR_TAB[tab];
 
-  setSpinner(true, brief ? 'Generating brief summary...' : 'Fetching transcript...');
-  hideError();
-  document.getElementById('result-box').classList.add('hidden');
-  document.getElementById('upgrade-box').classList.add('hidden');
+  setSpinner(tab, true, brief ? 'Generating brief summary...' : 'Fetching transcript...');
+  hideError(tab);
+  document.getElementById(`result-box-${tab}`).classList.add('hidden');
 
   try {
     const res  = await fetch(`${API}/api/summarize`, {
       method: 'POST',
       headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({url, brief, mode: _mode}),
+      body: JSON.stringify({url, brief, mode}),
     });
     const data = await res.json();
-    if (res.status === 402) {
-      showUpgrade(data.detail || 'Limit reached. Upgrade to continue.');
-      return;
-    }
-    if (res.status === 401) {
-      openModal('register-modal');
-      document.getElementById('register-error').textContent = data.detail || '';
-      document.getElementById('register-error').classList.remove('hidden');
-      return;
-    }
     if (!res.ok) throw new Error(data.detail || 'Unknown error');
-    showResult(data);
-    // Refresh user usage counts
-    if (_user) {
-      const me = await fetch(`${API}/api/auth/me`).then(r => r.json());
-      if (me.user) { _user = me.user; updateUsageBar(_user); }
-    }
+    showResult(tab, data);
   } catch(e) {
-    showError(e.message);
+    showError(tab, e.message);
   } finally {
-    setSpinner(false);
+    setSpinner(tab, false);
   }
 }
 
 // ── URL input detection ───────────────────────────────────────────────
-function onUrlInput() {
-  const url = document.getElementById('url-input').value.trim();
+function onUrlInput(tab) {
+  const url = document.getElementById(`url-input-${tab}`).value.trim();
   const isPlaylist = /[?&]list=/.test(url) && !/watch/.test(url);
-  document.getElementById('playlist-btn').classList.toggle('hidden', !isPlaylist);
+  document.getElementById(`playlist-btn-${tab}`).classList.toggle('hidden', !isPlaylist);
 }
 
 // ── Playlist ──────────────────────────────────────────────────────────
-async function doPlaylist() {
-  const url = document.getElementById('url-input').value.trim();
+async function doPlaylist(tab) {
+  const url = document.getElementById(`url-input-${tab}`).value.trim();
   if (!url) return;
+  const mode = MODE_FOR_TAB[tab];
 
-  document.getElementById('result-box').classList.add('hidden');
-  document.getElementById('playlist-box').classList.remove('hidden');
-  document.getElementById('playlist-results').innerHTML = '';
-  document.getElementById('playlist-status').textContent = 'Fetching playlist…';
-  document.getElementById('error-box').classList.add('hidden');
+  document.getElementById(`result-box-${tab}`).classList.add('hidden');
+  document.getElementById(`playlist-box-${tab}`).classList.remove('hidden');
+  document.getElementById(`playlist-results-${tab}`).innerHTML = '';
+  document.getElementById(`playlist-status-${tab}`).textContent = 'Fetching playlist…';
+  document.getElementById(`error-box-${tab}`).classList.add('hidden');
 
   try {
     const res = await fetch(`${API}/api/summarize/playlist`, {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({url, mode: _mode}),
+      body: JSON.stringify({url, mode}),
     });
 
     if (!res.ok) {
       const data = await res.json();
-      showError(data.detail || 'Playlist error');
-      document.getElementById('playlist-box').classList.add('hidden');
+      showError(tab, data.detail || 'Playlist error');
+      document.getElementById(`playlist-box-${tab}`).classList.add('hidden');
       return;
     }
 
@@ -487,53 +270,53 @@ async function doPlaylist() {
         if (!chunk.startsWith('data: ')) continue;
         const msg = JSON.parse(chunk.slice(6));
         if (msg.type === 'start') {
-          document.getElementById('playlist-status').textContent =
+          document.getElementById(`playlist-status-${tab}`).textContent =
             `Processing 0 / ${msg.total} videos…`;
         } else if (msg.type === 'video') {
-          document.getElementById('playlist-status').textContent =
+          document.getElementById(`playlist-status-${tab}`).textContent =
             `Processing ${msg.index + 1} / ${msg.total} videos…`;
-          _appendPlaylistVideo(msg);
+          _appendPlaylistVideo(tab, msg);
         } else if (msg.type === 'error') {
-          _appendPlaylistError(msg);
+          _appendPlaylistError(tab, msg);
         } else if (msg.type === 'done') {
-          document.getElementById('playlist-status').textContent = 'Done.';
+          document.getElementById(`playlist-status-${tab}`).textContent = 'Done.';
         }
       }
     }
   } catch(e) {
-    showError(e.message);
-    document.getElementById('playlist-box').classList.add('hidden');
+    showError(tab, e.message);
+    document.getElementById(`playlist-box-${tab}`).classList.add('hidden');
   }
 }
 
-function _appendPlaylistVideo(data) {
+function _appendPlaylistVideo(tab, data) {
   const thesis = extractThesis(data.notes);
   const el = document.createElement('div');
   el.className = 'bg-slate-900 border border-slate-700 rounded-xl p-4 cursor-pointer hover:border-sky-700 transition';
-  el.onclick = () => { showResult(data); showTab('summarize'); };
+  el.onclick = () => { showResult(tab, data); showTab(tab); };
   el.innerHTML = `
     <p class="text-xs text-slate-500 mb-1">
       Video ${data.index + 1} of ${data.total} · ${data.word_count?.toLocaleString()} words
     </p>
     <p class="text-sm text-slate-200">${thesis}</p>
     <p class="text-xs text-slate-600 mt-1 truncate">${data.url}</p>`;
-  document.getElementById('playlist-results').appendChild(el);
+  document.getElementById(`playlist-results-${tab}`).appendChild(el);
 }
 
-function _appendPlaylistError(data) {
+function _appendPlaylistError(tab, data) {
   const el = document.createElement('div');
   el.className = 'bg-red-950 border border-red-800 rounded-xl p-4';
   el.innerHTML = `
     <p class="text-xs text-red-400">Video ${data.index + 1}: ${data.error}</p>
     <p class="text-xs text-slate-600">${data.url}</p>`;
-  document.getElementById('playlist-results').appendChild(el);
+  document.getElementById(`playlist-results-${tab}`).appendChild(el);
 }
 
-function showResult(data) {
-  document.getElementById('notes-content').innerHTML = marked.parse(data.notes || '');
-  document.getElementById('result-meta').textContent =
+function showResult(tab, data) {
+  document.getElementById(`notes-content-${tab}`).innerHTML = marked.parse(data.notes || '');
+  document.getElementById(`result-meta-${tab}`).textContent =
     `${data.word_count?.toLocaleString()} words · ${data.cached ? 'cached transcript' : 'fresh transcript'} · ID: ${data.id}`;
-  document.getElementById('result-box').classList.remove('hidden');
+  document.getElementById(`result-box-${tab}`).classList.remove('hidden');
 }
 
 // ── History ───────────────────────────────────────────────────────────
@@ -570,123 +353,10 @@ async function loadHistory() {
 
 async function loadSummary(id) {
   const data = await fetch(`${API}/api/summaries/${id}`).then(r => r.json());
-  document.getElementById('url-input').value = data.url;
-  showResult(data);
-  showTab('summarize');
-}
-
-// ── Account ───────────────────────────────────────────────────────────
-function renderAccount() {
-  if (!_user) { showTab('summarize'); openModal('login-modal'); return; }
-  document.getElementById('account-email').textContent   = _user.email;
-  document.getElementById('account-plan').textContent    = _user.plan;
-  document.getElementById('account-total').textContent   = _user.summary_count;
-  document.getElementById('account-monthly').textContent = _user.monthly_count;
-
-  const monthlyRow = document.getElementById('account-monthly-row');
-  monthlyRow.classList.toggle('hidden', _user.plan === 'free');
-
-  // Plan badges / buttons
-  ['free','basic','pro'].forEach(p => {
-    const badge = document.getElementById(`${p}-badge`);
-    const btn   = document.getElementById(`${p}-btn`);
-    if (_user.plan === p) {
-      if (badge) badge.classList.remove('hidden');
-      if (btn)   btn.classList.add('hidden');
-    } else {
-      if (badge) badge.classList.add('hidden');
-      if (btn)   btn.classList.remove('hidden');
-    }
-  });
-
-  const billingBtn = document.getElementById('billing-btn');
-  billingBtn.classList.toggle('hidden', _user.plan === 'free');
-}
-
-async function checkout(plan) {
-  if (!_user) { openModal('login-modal'); return; }
-  closeModal('upgrade-modal');
-  try {
-    const data = await fetch(`${API}/api/payments/checkout`, {
-      method: 'POST',
-      headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({plan}),
-    }).then(r => r.json());
-    if (data.url) location.href = data.url;
-  } catch(e) {
-    alert(e.message);
-  }
-}
-
-async function managePortal() {
-  try {
-    const data = await fetch(`${API}/api/payments/portal`, {method:'POST'}).then(r => r.json());
-    if (data.url) location.href = data.url;
-  } catch(e) {
-    alert(e.message);
-  }
-}
-
-// ── Auth ──────────────────────────────────────────────────────────────
-async function doRegister() {
-  const email    = document.getElementById('register-email').value.trim();
-  const password = document.getElementById('register-password').value;
-  const errEl    = document.getElementById('register-error');
-  errEl.classList.add('hidden');
-  try {
-    const res  = await fetch(`${API}/api/auth/register`, {
-      method: 'POST',
-      headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({email, password}),
-    });
-    const data = await res.json();
-    if (!res.ok) { errEl.textContent = data.detail; errEl.classList.remove('hidden'); return; }
-    setUser(data);
-    closeModal('register-modal');
-  } catch(e) {
-    errEl.textContent = e.message; errEl.classList.remove('hidden');
-  }
-}
-
-async function doLogin() {
-  const email    = document.getElementById('login-email').value.trim();
-  const password = document.getElementById('login-password').value;
-  const errEl    = document.getElementById('login-error');
-  errEl.classList.add('hidden');
-  try {
-    const res  = await fetch(`${API}/api/auth/login`, {
-      method: 'POST',
-      headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({email, password}),
-    });
-    const data = await res.json();
-    if (!res.ok) { errEl.textContent = data.detail; errEl.classList.remove('hidden'); return; }
-    setUser(data);
-    closeModal('login-modal');
-  } catch(e) {
-    errEl.textContent = e.message; errEl.classList.remove('hidden');
-  }
-}
-
-async function doLogout() {
-  await fetch(`${API}/api/auth/logout`, {method:'POST'});
-  clearUser();
-  showTab('summarize');
-}
-
-// ── Modals ────────────────────────────────────────────────────────────
-function openModal(id) {
-  document.getElementById(id).classList.add('open');
-}
-function closeModal(id) {
-  document.getElementById(id).classList.remove('open');
-}
-function closeModalOutside(e, id) {
-  if (e.target === document.getElementById(id)) closeModal(id);
-}
-function switchModal(from, to) {
-  closeModal(from);
-  openModal(to);
+  const tab = /## Thesis/.test(data.notes || '') ? 'financial' : 'general';
+  document.getElementById(`url-input-${tab}`).value = data.url;
+  showResult(tab, data);
+  showTab(tab);
 }
 
 // ── Utilities ─────────────────────────────────────────────────────────
@@ -696,38 +366,30 @@ function extractThesis(notes) {
   return t.length > 100 ? t.slice(0,100) + '…' : t;
 }
 
-function setSpinner(on, msg = '') {
-  const el = document.getElementById('spinner');
+function setSpinner(tab, on, msg = '') {
+  const el = document.getElementById(`spinner-${tab}`);
   el.classList.toggle('hidden', !on);
   el.classList.toggle('active', on);
-  if (msg) document.getElementById('spinner-msg').textContent = msg;
+  if (msg) document.getElementById(`spinner-msg-${tab}`).textContent = msg;
 }
 
-function showError(msg) {
-  const el = document.getElementById('error-box');
+function showError(tab, msg) {
+  const el = document.getElementById(`error-box-${tab}`);
   el.textContent = msg;
   el.classList.remove('hidden');
 }
 
-function hideError() {
-  document.getElementById('error-box').classList.add('hidden');
-}
-
-function showUpgrade(msg) {
-  document.getElementById('upgrade-msg').textContent = msg;
-  document.getElementById('upgrade-box').classList.remove('hidden');
+function hideError(tab) {
+  document.getElementById(`error-box-${tab}`).classList.add('hidden');
 }
 
 // Enter key submits
 document.addEventListener('DOMContentLoaded', () => {
-  document.getElementById('url-input').addEventListener('keydown', e => {
-    if (e.key === 'Enter') doSummarize(false);
+  document.getElementById('url-input-general').addEventListener('keydown', e => {
+    if (e.key === 'Enter') doSummarize('general', false);
   });
-  document.getElementById('login-password').addEventListener('keydown', e => {
-    if (e.key === 'Enter') doLogin();
-  });
-  document.getElementById('register-password').addEventListener('keydown', e => {
-    if (e.key === 'Enter') doRegister();
+  document.getElementById('url-input-financial').addEventListener('keydown', e => {
+    if (e.key === 'Enter') doSummarize('financial', false);
   });
   init();
 });

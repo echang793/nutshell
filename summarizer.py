@@ -9,6 +9,11 @@ from pathlib import Path
 CACHE_DIR  = Path(__file__).parent / "data" / "transcripts"
 GROQ_MODEL = "llama-3.3-70b-versatile"
 
+# Groq on-demand tier caps this model at 12000 tokens/minute (TPM), shared across
+# prompt + completion. ~4 chars/token, so keep the transcript small enough that
+# prompt + completion tokens stay comfortably under the limit for a single call.
+MAX_TRANSCRIPT_CHARS = 18_000
+
 _SYSTEM_PROMPT = (
     "You are an expert note-taker and summarizer for YouTube video transcripts of any kind — "
     "tutorials, lectures, podcasts, interviews, reviews, vlogs, and more. "
@@ -220,8 +225,8 @@ def _fetch_via_yt_api(video_id: str, api_key: str, model: str) -> str:
     text = re.sub(r"\s+", " ", text).strip()
 
     if translated:
-        text = _call_groq(_TRANSLATE_PROMPT.format(transcript=text[:60_000]),
-                          api_key, model, max_tokens=4096)
+        text = _call_groq(_TRANSLATE_PROMPT.format(transcript=text[:MAX_TRANSCRIPT_CHARS]),
+                          api_key, model, max_tokens=1200)
     return text
 
 
@@ -251,15 +256,17 @@ def _call_groq(prompt: str, api_key: str, model: str, max_tokens: int = 2048,
 
 def summarize(transcript: str, api_key: str, model: str = GROQ_MODEL,
               brief: bool = False, mode: str = "general") -> str:
-    if len(transcript) > 80_000:
-        transcript = transcript[:80_000] + "\n[transcript truncated]"
+    if len(transcript) > MAX_TRANSCRIPT_CHARS:
+        transcript = transcript[:MAX_TRANSCRIPT_CHARS] + "\n[transcript truncated]"
     if mode == "stock":
         template      = _STOCK_BRIEF_PROMPT if brief else _STOCK_FULL_PROMPT
         system_prompt = _STOCK_SYSTEM_PROMPT
+        max_tokens    = 600 if brief else 1400
     else:
         template      = _BRIEF_PROMPT if brief else _FULL_PROMPT
         system_prompt = _SYSTEM_PROMPT
+        max_tokens    = 500 if brief else 1200
     prompt = template.format(transcript=transcript)
-    return _call_groq(prompt, api_key, model, system_prompt=system_prompt)
+    return _call_groq(prompt, api_key, model, max_tokens=max_tokens, system_prompt=system_prompt)
 
 

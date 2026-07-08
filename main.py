@@ -8,15 +8,13 @@ from pathlib import Path
 
 import json as _json
 
-from fastapi import FastAPI, HTTPException, Request, Response
+from fastapi import FastAPI, HTTPException
 from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-import auth
 import db
-import payments
 import summarizer
 
 app = FastAPI(title="Nutshell")
@@ -24,10 +22,6 @@ app = FastAPI(title="Nutshell")
 STATIC_DIR  = Path(__file__).parent / "static"
 CONFIG_PATH = Path.home() / ".yt-notes.json"
 app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
-
-SESSION_COOKIE   = "yt_session"
-ANON_COOKIE      = "yt_anon"
-ANON_LIMIT       = 2
 
 
 def _get_api_key() -> str:
@@ -42,18 +36,6 @@ def _get_api_key() -> str:
     if not key:
         raise HTTPException(500, "GROQ_API_KEY not set. Run: python3 ~/Desktop/yt-notes/notes.py setup")
     return key
-
-
-def _current_user(request: Request) -> dict | None:
-    token = request.cookies.get(SESSION_COOKIE)
-    return auth.get_user_from_token(token)
-
-
-def _require_user(request: Request) -> dict:
-    user = _current_user(request)
-    if not user:
-        raise HTTPException(401, "Not logged in.")
-    return user
 
 
 # ── Health ────────────────────────────────────────────────────────────
@@ -92,73 +74,6 @@ def index():
     return FileResponse(STATIC_DIR / "index.html")
 
 
-# ── Auth ──────────────────────────────────────────────────────────────
-
-class AuthRequest(BaseModel):
-    email:    str
-    password: str
-
-
-@app.post("/api/auth/register")
-def api_register(req: AuthRequest, response: Response):
-    email = req.email.strip().lower()
-    if not email or not req.password:
-        raise HTTPException(400, "Email and password are required.")
-    if len(req.password) < 8:
-        raise HTTPException(400, "Password must be at least 8 characters.")
-    if db.get_user_by_email(email):
-        raise HTTPException(409, "An account with that email already exists.")
-
-    uid           = str(uuid.uuid4())
-    password_hash = auth.hash_password(req.password)
-    user          = db.create_user(uid, email, password_hash)
-    token         = auth.create_session(uid)
-
-    response.set_cookie(SESSION_COOKIE, token, max_age=86400 * 30,
-                        httponly=True, samesite="lax")
-    return _user_payload(user)
-
-
-@app.post("/api/auth/login")
-def api_login(req: AuthRequest, response: Response):
-    email = req.email.strip().lower()
-    user  = db.get_user_by_email(email)
-    if not user or not auth.verify_password(req.password, user["password_hash"]):
-        raise HTTPException(401, "Invalid email or password.")
-
-    token = auth.create_session(user["id"])
-    response.set_cookie(SESSION_COOKIE, token, max_age=86400 * 30,
-                        httponly=True, samesite="lax")
-    return _user_payload(user)
-
-
-@app.post("/api/auth/logout")
-def api_logout(request: Request, response: Response):
-    token = request.cookies.get(SESSION_COOKIE)
-    if token:
-        db.delete_session(token)
-    response.delete_cookie(SESSION_COOKIE)
-    return {"ok": True}
-
-
-@app.get("/api/auth/me")
-def api_me(request: Request):
-    user = _current_user(request)
-    if not user:
-        return {"user": None}
-    return {"user": _user_payload(user)}
-
-
-def _user_payload(user: dict) -> dict:
-    return {
-        "id":            user["id"],
-        "email":         user["email"],
-        "plan":          user["plan"],
-        "summary_count": user["summary_count"],
-        "monthly_count": user["monthly_count"],
-    }
-
-
 # ── Summarize ─────────────────────────────────────────────────────────
 
 class SummarizeRequest(BaseModel):
@@ -169,28 +84,11 @@ class SummarizeRequest(BaseModel):
 
 
 @app.post("/api/summarize")
-async def api_summarize(req: SummarizeRequest, request: Request, response: Response):
-    user     = _current_user(request)
+async def api_summarize(req: SummarizeRequest):
     api_key  = _get_api_key()
     video_id = summarizer.extract_video_id(req.url)
     if not video_id:
         raise HTTPException(400, f"Could not parse a video ID from: {req.url}")
-
-    if user:
-        # Enforce plan limits for logged-in users
-        allowed, reason = payments.can_summarize(user)
-        if not allowed:
-            raise HTTPException(402, reason)
-    else:
-        # Anonymous users get ANON_LIMIT free summaries tracked by cookie
-        try:
-            anon_count = int(request.cookies.get(ANON_COOKIE, "0"))
-        except ValueError:
-            anon_count = 0
-        if anon_count >= ANON_LIMIT:
-            raise HTTPException(401, "Create a free account to keep summarizing — it only takes 10 seconds.")
-        response.set_cookie(ANON_COOKIE, str(anon_count + 1),
-                            max_age=86400 * 30, httponly=True, samesite="lax")
 
     try:
         transcript, cached = await run_in_threadpool(
@@ -210,14 +108,10 @@ async def api_summarize(req: SummarizeRequest, request: Request, response: Respo
         raise HTTPException(502, str(e))
 
     sid = str(uuid.uuid4())[:8]
-    uid = user["id"] if user else None
 
     await run_in_threadpool(
-        db.save_summary, sid, video_id, req.url, notes, req.brief, word_count, uid
+        db.save_summary, sid, video_id, req.url, notes, req.brief, word_count
     )
-
-    if uid:
-        await run_in_threadpool(db.increment_summary_count, uid)
 
     return {
         "id":         sid,
@@ -239,51 +133,8 @@ def api_get_summary(sid: str):
 
 
 @app.get("/api/history")
-def api_history(request: Request, limit: int = 50):
-    user = _current_user(request)
-    uid  = user["id"] if user else None
-    return db.get_history(limit, user_id=uid)
-
-
-# ── Payments ──────────────────────────────────────────────────────────
-
-class CheckoutRequest(BaseModel):
-    plan: str  # "basic" or "pro"
-
-
-@app.post("/api/payments/checkout")
-def api_checkout(req: CheckoutRequest, request: Request):
-    user        = _require_user(request)
-    base_url    = str(request.base_url).rstrip("/")
-    success_url = f"{base_url}/"
-    cancel_url  = f"{base_url}/"
-    try:
-        url = payments.create_checkout_session(user, req.plan, success_url, cancel_url)
-    except Exception as e:
-        raise HTTPException(400, str(e))
-    return {"url": url}
-
-
-@app.post("/api/payments/portal")
-def api_portal(request: Request):
-    user       = _require_user(request)
-    return_url = str(request.base_url).rstrip("/") + "/"
-    try:
-        url = payments.create_portal_session(user, return_url)
-    except ValueError as e:
-        raise HTTPException(400, str(e))
-    return {"url": url}
-
-
-@app.post("/api/payments/webhook")
-async def api_webhook(request: Request):
-    payload    = await request.body()
-    sig_header = request.headers.get("stripe-signature", "")
-    try:
-        await run_in_threadpool(payments.handle_webhook, payload, sig_header)
-    except ValueError as e:
-        raise HTTPException(400, str(e))
-    return {"ok": True}
+def api_history(limit: int = 50):
+    return db.get_history(limit)
 
 
 # ── Playlist ──────────────────────────────────────────────────────────
@@ -296,8 +147,7 @@ class PlaylistRequest(BaseModel):
 
 
 @app.post("/api/summarize/playlist")
-async def api_summarize_playlist(req: PlaylistRequest, request: Request):
-    user    = _current_user(request)
+async def api_summarize_playlist(req: PlaylistRequest):
     api_key = _get_api_key()
     mode    = req.mode if req.mode in ("general", "stock") else "general"
 
@@ -321,17 +171,14 @@ async def api_summarize_playlist(req: PlaylistRequest, request: Request):
                 transcript, cached = await run_in_threadpool(
                     summarizer.fetch_transcript, vid, api_key, req.model
                 )
-                notes   = await run_in_threadpool(
+                notes = await run_in_threadpool(
                     summarizer.summarize, transcript, api_key, req.model, req.brief, mode
                 )
-                sid     = str(uuid.uuid4())[:8]
-                uid     = user["id"] if user else None
+                sid = str(uuid.uuid4())[:8]
                 await run_in_threadpool(
                     db.save_summary, sid, vid, vid_url, notes, req.brief,
-                    len(transcript.split()), uid
+                    len(transcript.split())
                 )
-                if uid:
-                    await run_in_threadpool(db.increment_summary_count, uid)
                 payload = {
                     "type": "video", "index": i, "total": len(video_ids),
                     "id": sid, "video_id": vid, "url": vid_url,

@@ -23,32 +23,10 @@ _SCHEMA_STMTS = [
         notes       TEXT    NOT NULL,
         brief       INTEGER NOT NULL DEFAULT 0,
         word_count  INTEGER NOT NULL DEFAULT 0,
-        created_at  TEXT    NOT NULL,
-        user_id     TEXT
+        created_at  TEXT    NOT NULL
     )""",
     "CREATE INDEX IF NOT EXISTS idx_created ON summaries(created_at DESC)",
     "CREATE INDEX IF NOT EXISTS idx_video   ON summaries(video_id)",
-    "CREATE INDEX IF NOT EXISTS idx_user    ON summaries(user_id)",
-    """CREATE TABLE IF NOT EXISTS users (
-        id                     TEXT PRIMARY KEY,
-        email                  TEXT NOT NULL UNIQUE,
-        password_hash          TEXT NOT NULL,
-        plan                   TEXT NOT NULL DEFAULT 'free',
-        summary_count          INTEGER NOT NULL DEFAULT 0,
-        monthly_count          INTEGER NOT NULL DEFAULT 0,
-        stripe_customer_id     TEXT,
-        stripe_subscription_id TEXT,
-        created_at             TEXT NOT NULL
-    )""",
-    "CREATE INDEX IF NOT EXISTS idx_user_email  ON users(email)",
-    "CREATE INDEX IF NOT EXISTS idx_user_stripe ON users(stripe_customer_id)",
-    """CREATE TABLE IF NOT EXISTS sessions (
-        token      TEXT PRIMARY KEY,
-        user_id    TEXT NOT NULL,
-        expires_at TEXT NOT NULL,
-        FOREIGN KEY (user_id) REFERENCES users(id)
-    )""",
-    "CREATE INDEX IF NOT EXISTS idx_session_user ON sessions(user_id)",
 ]
 
 
@@ -168,15 +146,14 @@ _MAX_SUMMARIES = 1000
 
 
 def save_summary(id: str, video_id: str, url: str, notes: str,
-                 brief: bool, word_count: int,
-                 user_id: str | None = None) -> None:
+                 brief: bool, word_count: int) -> None:
     with _conn() as c:
         c.execute(
             """INSERT OR REPLACE INTO summaries
-               (id, video_id, url, notes, brief, word_count, created_at, user_id)
-               VALUES (?,?,?,?,?,?,?,?)""",
+               (id, video_id, url, notes, brief, word_count, created_at)
+               VALUES (?,?,?,?,?,?,?)""",
             (id, video_id, url, notes, int(brief), word_count,
-             datetime.now().isoformat(), user_id),
+             datetime.now().isoformat()),
         )
         c.execute(
             """DELETE FROM summaries WHERE id IN (
@@ -194,17 +171,11 @@ def get_summary(id: str) -> dict | None:
     return _row_to_dict(row)
 
 
-def get_history(limit: int = 50, user_id: str | None = None) -> list[dict]:
+def get_history(limit: int = 50) -> list[dict]:
     with _conn() as c:
-        if user_id:
-            rows = c.execute(
-                "SELECT * FROM summaries WHERE user_id=? ORDER BY created_at DESC LIMIT ?",
-                (user_id, limit)
-            ).fetchall()
-        else:
-            rows = c.execute(
-                "SELECT * FROM summaries ORDER BY created_at DESC LIMIT ?", (limit,)
-            ).fetchall()
+        rows = c.execute(
+            "SELECT * FROM summaries ORDER BY created_at DESC LIMIT ?", (limit,)
+        ).fetchall()
     return [_row_to_dict(r) for r in rows]
 
 
@@ -216,85 +187,6 @@ def get_monthly_summary_count() -> int:
             (month_prefix + "-01",),
         ).fetchone()
     return int(row["n"]) if row else 0
-
-
-# ── Users ─────────────────────────────────────────────────────────────
-
-def create_user(id: str, email: str, password_hash: str) -> dict:
-    with _conn() as c:
-        c.execute(
-            "INSERT INTO users (id, email, password_hash, created_at) VALUES (?,?,?,?)",
-            (id, email, password_hash, datetime.now().isoformat()),
-        )
-    return get_user_by_id(id)
-
-
-def get_user_by_email(email: str) -> dict | None:
-    with _conn() as c:
-        row = c.execute("SELECT * FROM users WHERE email=?", (email,)).fetchone()
-    return dict(row) if row else None
-
-
-def get_user_by_id(id: str) -> dict | None:
-    with _conn() as c:
-        row = c.execute("SELECT * FROM users WHERE id=?", (id,)).fetchone()
-    return dict(row) if row else None
-
-
-def get_user_by_stripe_customer(customer_id: str) -> dict | None:
-    with _conn() as c:
-        row = c.execute(
-            "SELECT * FROM users WHERE stripe_customer_id=?", (customer_id,)
-        ).fetchone()
-    return dict(row) if row else None
-
-
-def update_user(id: str, **kwargs) -> None:
-    if not kwargs:
-        return
-    cols = ", ".join(f"{k}=?" for k in kwargs)
-    vals = list(kwargs.values()) + [id]
-    with _conn() as c:
-        c.execute(f"UPDATE users SET {cols} WHERE id=?", vals)
-
-
-def increment_summary_count(user_id: str) -> None:
-    with _conn() as c:
-        c.execute(
-            "UPDATE users SET summary_count=summary_count+1, monthly_count=monthly_count+1 WHERE id=?",
-            (user_id,)
-        )
-
-
-def reset_monthly_count(user_id: str) -> None:
-    with _conn() as c:
-        c.execute("UPDATE users SET monthly_count=0 WHERE id=?", (user_id,))
-
-
-# ── Sessions ──────────────────────────────────────────────────────────
-
-def create_session(token: str, user_id: str, expires_at: str) -> None:
-    with _conn() as c:
-        c.execute(
-            "INSERT INTO sessions (token, user_id, expires_at) VALUES (?,?,?)",
-            (token, user_id, expires_at),
-        )
-
-
-def get_user_by_session(token: str) -> dict | None:
-    with _conn() as c:
-        row = c.execute(
-            """SELECT u.* FROM users u
-               JOIN sessions s ON s.user_id = u.id
-               WHERE s.token=? AND s.expires_at > ?""",
-            (token, datetime.now().isoformat()),
-        ).fetchone()
-    return dict(row) if row else None
-
-
-def delete_session(token: str) -> None:
-    with _conn() as c:
-        c.execute("DELETE FROM sessions WHERE token=?", (token,))
 
 
 def _row_to_dict(row) -> dict:
