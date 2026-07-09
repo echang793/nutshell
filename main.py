@@ -107,20 +107,25 @@ async def api_summarize(req: SummarizeRequest):
     except RuntimeError as e:
         raise HTTPException(502, str(e))
 
-    sid = str(uuid.uuid4())[:8]
+    title     = await run_in_threadpool(summarizer.fetch_video_title, video_id)
+    thumb_url = summarizer.thumbnail_url(video_id)
+    sid       = str(uuid.uuid4())[:8]
 
     await run_in_threadpool(
-        db.save_summary, sid, video_id, req.url, notes, req.brief, word_count
+        db.save_summary, sid, video_id, req.url, notes, req.brief, word_count,
+        title, thumb_url
     )
 
     return {
-        "id":         sid,
-        "video_id":   video_id,
-        "url":        req.url,
-        "notes":      notes,
-        "brief":      req.brief,
-        "word_count": word_count,
-        "cached":     cached,
+        "id":            sid,
+        "video_id":      video_id,
+        "url":           req.url,
+        "title":         title,
+        "thumbnail_url": thumb_url,
+        "notes":         notes,
+        "brief":         req.brief,
+        "word_count":    word_count,
+        "cached":        cached,
     }
 
 
@@ -182,14 +187,17 @@ async def api_summarize_playlist(req: PlaylistRequest):
                 notes = await run_in_threadpool(
                     summarizer.summarize, transcript, api_key, req.model, req.brief, mode
                 )
-                sid = str(uuid.uuid4())[:8]
+                title     = await run_in_threadpool(summarizer.fetch_video_title, vid)
+                thumb_url = summarizer.thumbnail_url(vid)
+                sid       = str(uuid.uuid4())[:8]
                 await run_in_threadpool(
                     db.save_summary, sid, vid, vid_url, notes, req.brief,
-                    len(transcript.split())
+                    len(transcript.split()), title, thumb_url
                 )
                 payload = {
                     "type": "video", "index": i, "total": len(video_ids),
                     "id": sid, "video_id": vid, "url": vid_url,
+                    "title": title, "thumbnail_url": thumb_url,
                     "notes": notes,
                     "word_count": len(transcript.split()),
                 }

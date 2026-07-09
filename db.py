@@ -20,6 +20,7 @@ _SCHEMA_STMTS = [
         video_id    TEXT    NOT NULL,
         url         TEXT    NOT NULL,
         title       TEXT    NOT NULL DEFAULT '',
+        thumbnail_url TEXT  NOT NULL DEFAULT '',
         notes       TEXT    NOT NULL,
         brief       INTEGER NOT NULL DEFAULT 0,
         word_count  INTEGER NOT NULL DEFAULT 0,
@@ -146,13 +147,14 @@ _MAX_SUMMARIES = 1000
 
 
 def save_summary(id: str, video_id: str, url: str, notes: str,
-                 brief: bool, word_count: int) -> None:
+                 brief: bool, word_count: int,
+                 title: str = "", thumbnail_url: str = "") -> None:
     with _conn() as c:
         c.execute(
             """INSERT OR REPLACE INTO summaries
-               (id, video_id, url, notes, brief, word_count, created_at)
-               VALUES (?,?,?,?,?,?,?)""",
-            (id, video_id, url, notes, int(brief), word_count,
+               (id, video_id, url, title, thumbnail_url, notes, brief, word_count, created_at)
+               VALUES (?,?,?,?,?,?,?,?,?)""",
+            (id, video_id, url, title, thumbnail_url, notes, int(brief), word_count,
              datetime.now().isoformat()),
         )
         c.execute(

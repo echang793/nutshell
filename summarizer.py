@@ -139,6 +139,26 @@ def extract_video_id(url: str) -> str | None:
     return match.group(1) if match else None
 
 
+def fetch_video_title(video_id: str) -> str:
+    """Best-effort title lookup via YouTube's public oEmbed endpoint. Never raises."""
+    import requests
+    try:
+        resp = requests.get(
+            "https://www.youtube.com/oembed",
+            params={"url": f"https://www.youtube.com/watch?v={video_id}", "format": "json"},
+            timeout=10,
+        )
+        if not resp.ok:
+            return ""
+        return resp.json().get("title", "") or ""
+    except Exception:
+        return ""
+
+
+def thumbnail_url(video_id: str) -> str:
+    return f"https://img.youtube.com/vi/{video_id}/mqdefault.jpg"
+
+
 def extract_playlist_id(url: str) -> str | None:
     """Return playlist ID only for pure playlist URLs (not single-video-in-playlist)."""
     if "watch" in url:
