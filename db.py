@@ -30,6 +30,10 @@ _SCHEMA_STMTS = [
     )""",
     "CREATE INDEX IF NOT EXISTS idx_created ON summaries(created_at DESC)",
     "CREATE INDEX IF NOT EXISTS idx_video   ON summaries(video_id)",
+    """CREATE TABLE IF NOT EXISTS groq_usage (
+        date   TEXT    PRIMARY KEY,
+        tokens INTEGER NOT NULL DEFAULT 0
+    )""",
 ]
 
 # Additive migrations for columns added after the table first existed in prod.
@@ -226,6 +230,38 @@ def get_monthly_summary_count() -> int:
             (month_prefix + "-01",),
         ).fetchone()
     return int(row["n"]) if row else 0
+
+
+def record_groq_usage(tokens: int) -> None:
+    today = datetime.now().strftime("%Y-%m-%d")
+    with _conn() as c:
+        c.execute(
+            "INSERT INTO groq_usage (date, tokens) VALUES (?, ?) "
+            "ON CONFLICT(date) DO UPDATE SET tokens = tokens + excluded.tokens",
+            (today, tokens),
+        )
+
+
+def set_groq_usage_today(tokens: int) -> None:
+    """Resync to Groq's authoritative usage figure (parsed from a 429 error body).
+    Our own counter only sees calls made through this app, so it can undercount
+    if other traffic shares the same Groq account — take the max, never regress."""
+    today = datetime.now().strftime("%Y-%m-%d")
+    with _conn() as c:
+        c.execute(
+            "INSERT INTO groq_usage (date, tokens) VALUES (?, ?) "
+            "ON CONFLICT(date) DO UPDATE SET tokens = MAX(tokens, excluded.tokens)",
+            (today, tokens),
+        )
+
+
+def get_groq_usage_today() -> int:
+    today = datetime.now().strftime("%Y-%m-%d")
+    with _conn() as c:
+        row = c.execute(
+            "SELECT tokens FROM groq_usage WHERE date=?", (today,)
+        ).fetchone()
+    return int(row["tokens"]) if row else 0
 
 
 def _row_to_dict(row) -> dict:

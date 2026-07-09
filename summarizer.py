@@ -182,8 +182,10 @@ def get_playlist_video_ids(playlist_id: str) -> list[str]:
         raise RuntimeError(f"yt-dlp failed: {e.stderr.strip()}")
 
 
-def fetch_transcript(video_id: str, api_key: str, model: str = GROQ_MODEL) -> tuple[str, bool]:
-    """Return (transcript_text, from_cache)."""
+def fetch_transcript(video_id: str, api_key: str, model: str = GROQ_MODEL,
+                      usage_cb=None, usage_sync_cb=None) -> tuple[str, bool]:
+    """Return (transcript_text, from_cache). usage_cb(tokens:int) fires for any
+    Groq call made along the way (only happens if translation is needed)."""
     import os
     CACHE_DIR.mkdir(parents=True, exist_ok=True)
     cache = CACHE_DIR / f"{video_id}.txt"
@@ -194,7 +196,7 @@ def fetch_transcript(video_id: str, api_key: str, model: str = GROQ_MODEL) -> tu
     if supadata_key:
         text = _fetch_via_supadata(video_id, supadata_key)
     else:
-        text = _fetch_via_yt_api(video_id, api_key, model)
+        text = _fetch_via_yt_api(video_id, api_key, model, usage_cb, usage_sync_cb)
 
     cache.write_text(text)
     return text, False
@@ -218,7 +220,8 @@ def _fetch_via_supadata(video_id: str, supadata_key: str) -> str:
     return re.sub(r"\s+", " ", text).strip()
 
 
-def _fetch_via_yt_api(video_id: str, api_key: str, model: str) -> str:
+def _fetch_via_yt_api(video_id: str, api_key: str, model: str,
+                       usage_cb=None, usage_sync_cb=None) -> str:
     from youtube_transcript_api import YouTubeTranscriptApi
     api        = YouTubeTranscriptApi()
     translated = False
@@ -246,12 +249,14 @@ def _fetch_via_yt_api(video_id: str, api_key: str, model: str) -> str:
 
     if translated:
         text = _call_groq(_TRANSLATE_PROMPT.format(transcript=text[:MAX_TRANSCRIPT_CHARS]),
-                          api_key, model, max_tokens=1200)
+                          api_key, model, max_tokens=1200,
+                          usage_cb=usage_cb, usage_sync_cb=usage_sync_cb)
     return text
 
 
 def _call_groq(prompt: str, api_key: str, model: str, max_tokens: int = 2048,
-               retries: int = 2, system_prompt: str = _SYSTEM_PROMPT) -> str:
+               retries: int = 2, system_prompt: str = _SYSTEM_PROMPT,
+               usage_cb=None, usage_sync_cb=None) -> str:
     from groq import Groq, APIConnectionError, APIStatusError
 
     client = Groq(api_key=api_key)
@@ -266,16 +271,33 @@ def _call_groq(prompt: str, api_key: str, model: str, max_tokens: int = 2048,
                 temperature=0.1,
                 max_tokens=max_tokens,
             )
+            if usage_cb and resp.usage:
+                try:
+                    usage_cb(resp.usage.total_tokens)
+                except Exception:
+                    pass  # usage tracking must never break the summarize flow
             return resp.choices[0].message.content
         except (APIConnectionError, APIStatusError) as e:
             if attempt < retries:
                 time.sleep(2 ** attempt)
             else:
+                # Our own token counter only sees calls made through this app —
+                # it can't see other traffic on the same Groq account. On a rate
+                # limit, the error body reports the account's true daily usage;
+                # resync our tracker to that ground truth so /api/quota stays honest.
+                if usage_sync_cb:
+                    match = re.search(r"Used (\d+)", str(e))
+                    if match:
+                        try:
+                            usage_sync_cb(int(match.group(1)))
+                        except Exception:
+                            pass
                 raise RuntimeError(f"Groq API failed after {retries + 1} attempts: {e}")
 
 
 def summarize(transcript: str, api_key: str, model: str = GROQ_MODEL,
-              brief: bool = False, mode: str = "general") -> str:
+              brief: bool = False, mode: str = "general",
+              usage_cb=None, usage_sync_cb=None) -> str:
     if len(transcript) > MAX_TRANSCRIPT_CHARS:
         transcript = transcript[:MAX_TRANSCRIPT_CHARS] + "\n[transcript truncated]"
     if mode == "stock":
@@ -287,6 +309,7 @@ def summarize(transcript: str, api_key: str, model: str = GROQ_MODEL,
         system_prompt = _SYSTEM_PROMPT
         max_tokens    = 500 if brief else 1200
     prompt = template.format(transcript=transcript)
-    return _call_groq(prompt, api_key, model, max_tokens=max_tokens, system_prompt=system_prompt)
+    return _call_groq(prompt, api_key, model, max_tokens=max_tokens,
+                       system_prompt=system_prompt, usage_cb=usage_cb, usage_sync_cb=usage_sync_cb)
 
 

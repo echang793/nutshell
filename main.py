@@ -23,6 +23,8 @@ STATIC_DIR  = Path(__file__).parent / "static"
 CONFIG_PATH = Path.home() / ".yt-notes.json"
 app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
+GROQ_DAILY_LIMIT = int(os.environ.get("GROQ_TPD_LIMIT", "100000"))
+
 
 @app.exception_handler(Exception)
 async def unhandled_exception_handler(request: Request, exc: Exception):
@@ -70,7 +72,13 @@ def api_quota():
     SUPADATA_LIMIT = 100
     used      = db.get_monthly_summary_count()
     remaining = max(0, SUPADATA_LIMIT - used)
-    return {"used": used, "limit": SUPADATA_LIMIT, "remaining": remaining}
+
+    groq_used      = db.get_groq_usage_today()
+    groq_remaining = max(0, GROQ_DAILY_LIMIT - groq_used)
+    return {
+        "used": used, "limit": SUPADATA_LIMIT, "remaining": remaining,
+        "groq_used": groq_used, "groq_limit": GROQ_DAILY_LIMIT, "groq_remaining": groq_remaining,
+    }
 
 
 # ── Static ────────────────────────────────────────────────────────────
@@ -98,7 +106,8 @@ async def api_summarize(req: SummarizeRequest):
 
     try:
         transcript, cached = await run_in_threadpool(
-            summarizer.fetch_transcript, video_id, api_key, req.model
+            summarizer.fetch_transcript, video_id, api_key, req.model,
+            db.record_groq_usage, db.set_groq_usage_today
         )
     except Exception as e:
         raise HTTPException(400, str(e))
@@ -108,7 +117,8 @@ async def api_summarize(req: SummarizeRequest):
     mode = req.mode if req.mode in ("general", "stock") else "general"
     try:
         notes = await run_in_threadpool(
-            summarizer.summarize, transcript, api_key, req.model, req.brief, mode
+            summarizer.summarize, transcript, api_key, req.model, req.brief, mode,
+            db.record_groq_usage, db.set_groq_usage_today
         )
     except RuntimeError as e:
         raise HTTPException(502, str(e))
@@ -122,6 +132,7 @@ async def api_summarize(req: SummarizeRequest):
         title, thumb_url, mode
     )
 
+    groq_used = db.get_groq_usage_today()
     return {
         "id":            sid,
         "video_id":      video_id,
@@ -133,6 +144,8 @@ async def api_summarize(req: SummarizeRequest):
         "word_count":    word_count,
         "cached":        cached,
         "mode":          mode,
+        "groq_used":     groq_used,
+        "groq_limit":    GROQ_DAILY_LIMIT,
     }
 
 
@@ -207,10 +220,12 @@ async def api_summarize_playlist(req: PlaylistRequest):
             vid_url = f"https://www.youtube.com/watch?v={vid}"
             try:
                 transcript, cached = await run_in_threadpool(
-                    summarizer.fetch_transcript, vid, api_key, req.model
+                    summarizer.fetch_transcript, vid, api_key, req.model,
+                    db.record_groq_usage, db.set_groq_usage_today
                 )
                 notes = await run_in_threadpool(
-                    summarizer.summarize, transcript, api_key, req.model, req.brief, mode
+                    summarizer.summarize, transcript, api_key, req.model, req.brief, mode,
+                    db.record_groq_usage, db.set_groq_usage_today
                 )
                 title     = await run_in_threadpool(summarizer.fetch_video_title, vid)
                 thumb_url = summarizer.thumbnail_url(vid)

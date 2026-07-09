@@ -51,9 +51,10 @@
 
   <main class="max-w-4xl mx-auto px-4 py-8">
 
-    <!-- Supadata monthly quota (shared, mode-agnostic) -->
-    <div id="quota-line" class="mb-4 text-xs text-slate-600 hidden no-print">
-      <span id="quota-text"></span>
+    <!-- Supadata + Groq quota (shared, mode-agnostic) -->
+    <div id="quota-line" class="mb-4 text-xs text-slate-600 hidden no-print space-y-0.5">
+      <p id="quota-text"></p>
+      <p id="groq-quota-text"></p>
     </div>
 
     <!-- ── GENERAL TAB ── -->
@@ -263,19 +264,45 @@ const API = '';
 const MODE_FOR_TAB = { general: 'general', financial: 'stock' };
 let _lastRequest = {};  // tab -> {url, brief}
 let _lastResult  = {};  // tab -> last response data
+let _groqWarned  = false;  // avoid re-toasting the Groq quota warning every summarize
+
+// ── Quota ─────────────────────────────────────────────────────────────
+async function refreshQuota() {
+  try {
+    const q = await fetch(`${API}/api/quota`).then(r => r.json());
+    const wrap = document.getElementById('quota-line');
+
+    const el = document.getElementById('quota-text');
+    el.className = q.remaining <= 10 ? 'text-amber-500' : 'text-slate-600';
+    el.textContent = `Transcript quota: ${q.remaining} of ${q.limit} remaining this month`;
+
+    const groqEl = document.getElementById('groq-quota-text');
+    const groqPct = q.groq_limit ? q.groq_remaining / q.groq_limit : 1;
+    groqEl.className = groqPct <= 0.15 ? 'text-amber-500' : 'text-slate-600';
+    groqEl.textContent =
+      `AI quota: ${q.groq_remaining?.toLocaleString()} of ${q.groq_limit?.toLocaleString()} tokens remaining today`;
+
+    wrap.classList.remove('hidden');
+    maybeWarnGroqQuota(q);
+    return q;
+  } catch(_) { return null; }
+}
+
+function maybeWarnGroqQuota(q) {
+  if (!q.groq_limit || _groqWarned) return;
+  const pct = q.groq_remaining / q.groq_limit;
+  if (pct <= 0.15) {
+    _groqWarned = true;
+    showToast(
+      `Heads up: only ${q.groq_remaining.toLocaleString()} of ${q.groq_limit.toLocaleString()} daily AI tokens left. Summaries may start failing until it resets.`,
+      'error'
+    );
+  }
+}
 
 // ── Bootstrap ─────────────────────────────────────────────────────────
 async function init() {
-  // Supadata quota
-  try {
-    const q = await fetch(`${API}/api/quota`).then(r => r.json());
-    const el = document.getElementById('quota-text');
-    const wrap = document.getElementById('quota-line');
-    const color = q.remaining <= 10 ? 'text-amber-500' : 'text-slate-600';
-    el.className = color;
-    el.textContent = `Transcript quota: ${q.remaining} of ${q.limit} remaining this month`;
-    wrap.classList.remove('hidden');
-  } catch(_) {}
+  await refreshQuota();
 
   // Deep-link to a summary
   const params = new URLSearchParams(location.search);
@@ -348,10 +375,15 @@ async function doSummarize(tab, brief) {
     const data = await res.json();
     if (!res.ok) throw new Error(data.detail || 'Unknown error');
     showResult(tab, data);
+    if (data.groq_limit) {
+      maybeWarnGroqQuota({groq_used: data.groq_used, groq_limit: data.groq_limit,
+                           groq_remaining: data.groq_limit - data.groq_used});
+    }
   } catch(e) {
     showError(tab, e.message);
   } finally {
     setSpinner(tab, false);
+    refreshQuota();  // a rate-limit error resyncs our tracker server-side — always reflect it
   }
 }
 
