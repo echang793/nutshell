@@ -15,6 +15,20 @@
     .prose p { margin: 0.4rem 0; line-height: 1.6; }
     #spinner-general.active, #spinner-financial.active { display:flex; }
     #spinner-general, #spinner-financial { display:none; }
+    #toast-container { position: fixed; bottom: 1.25rem; right: 1.25rem; z-index: 100;
+      display: flex; flex-direction: column; gap: 0.5rem; }
+    .toast { padding: 0.6rem 1rem; border-radius: 0.5rem; font-size: 0.8rem; max-width: 320px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.4); animation: toast-in 0.15s ease-out; }
+    .toast-success { background: #14532d; color: #86efac; border: 1px solid #166534; }
+    .toast-error   { background: #450a0a; color: #fca5a5; border: 1px solid #7f1d1d; }
+    .toast-info    { background: #1e293b; color: #cbd5e1; border: 1px solid #334155; }
+    @keyframes toast-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+    @media print {
+      header, nav, .no-print { display: none !important; }
+      body { background: white; color: black; }
+      .prose h2 { color: #0f172a; }
+      .prose strong { color: #0f172a; }
+    }
   </style>
 </head>
 <body class="min-h-screen font-mono">
@@ -38,13 +52,13 @@
   <main class="max-w-4xl mx-auto px-4 py-8">
 
     <!-- Supadata monthly quota (shared, mode-agnostic) -->
-    <div id="quota-line" class="mb-4 text-xs text-slate-600 hidden">
+    <div id="quota-line" class="mb-4 text-xs text-slate-600 hidden no-print">
       <span id="quota-text"></span>
     </div>
 
     <!-- ── GENERAL TAB ── -->
     <div id="tab-general-content">
-      <div class="bg-slate-900 border border-slate-700 rounded-xl p-6 mb-6">
+      <div class="bg-slate-900 border border-slate-700 rounded-xl p-6 mb-6 no-print">
         <label class="block text-sm text-slate-400 mb-2">YouTube URL</label>
         <input id="url-input-general" type="text"
           placeholder="https://www.youtube.com/watch?v=..."
@@ -68,7 +82,13 @@
         </div>
       </div>
 
-      <div id="spinner-general" class="items-center gap-3 text-slate-400 text-sm mb-6 hidden">
+      <div id="skeleton-general" class="hidden space-y-3 mb-6 no-print">
+        <div class="h-4 bg-slate-800 rounded animate-pulse w-1/3"></div>
+        <div class="h-24 bg-slate-800 rounded animate-pulse"></div>
+        <div class="h-4 bg-slate-800 rounded animate-pulse w-2/3"></div>
+      </div>
+
+      <div id="spinner-general" class="items-center gap-3 text-slate-400 text-sm mb-6 hidden no-print">
         <svg class="animate-spin h-5 w-5 text-sky-500" fill="none" viewBox="0 0 24 24">
           <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
           <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/>
@@ -77,7 +97,7 @@
       </div>
 
       <div id="error-box-general" class="hidden bg-red-950 border border-red-800 text-red-300
-                                          rounded-lg px-4 py-3 text-sm mb-6">
+                                          rounded-lg px-4 py-3 text-sm mb-6 no-print">
         <div class="flex items-center justify-between gap-4">
           <span id="error-msg-general"></span>
           <button onclick="retryLast('general')"
@@ -90,28 +110,38 @@
         <div class="bg-slate-900 border border-slate-700 rounded-xl p-6">
           <div id="notes-content-general" class="prose text-sm text-slate-300"></div>
         </div>
-        <div class="flex items-center justify-between gap-4 mt-2 flex-wrap">
+        <div class="flex items-center justify-between gap-4 mt-2 flex-wrap no-print">
           <p class="text-xs text-slate-600" id="result-meta-general"></p>
           <div class="flex items-center gap-2">
             <button onclick="copyNotes('general')"
               class="text-xs text-slate-400 hover:text-sky-400 border border-slate-700 hover:border-sky-700 px-3 py-1 rounded-lg transition">Copy</button>
             <button onclick="copyShareLink('general')"
               class="text-xs text-slate-400 hover:text-sky-400 border border-slate-700 hover:border-sky-700 px-3 py-1 rounded-lg transition">Share</button>
+            <button onclick="printResult('general')"
+              class="text-xs text-slate-400 hover:text-sky-400 border border-slate-700 hover:border-sky-700 px-3 py-1 rounded-lg transition">Print / PDF</button>
+            <button onclick="pinResult('general')" id="pin-btn-general"
+              class="text-xs text-slate-400 hover:text-amber-400 border border-slate-700 hover:border-amber-700 px-3 py-1 rounded-lg transition">☆ Pin</button>
             <button onclick="regenerate('general')"
               class="text-xs text-slate-400 hover:text-sky-400 border border-slate-700 hover:border-sky-700 px-3 py-1 rounded-lg transition">Regenerate</button>
           </div>
         </div>
       </div>
 
-      <div id="playlist-box-general" class="hidden">
-        <p id="playlist-status-general" class="text-sm text-slate-400 mb-4"></p>
+      <div id="playlist-box-general" class="hidden no-print">
+        <div class="flex items-center justify-between gap-4 mb-4">
+          <p id="playlist-status-general" class="text-sm text-slate-400"></p>
+          <button id="playlist-download-general" onclick="downloadPlaylist('general')"
+            class="hidden shrink-0 text-xs text-slate-400 hover:text-sky-400 border border-slate-700 hover:border-sky-700 px-3 py-1 rounded-lg transition">
+            Download All (.md)
+          </button>
+        </div>
         <div id="playlist-results-general" class="space-y-3"></div>
       </div>
     </div>
 
     <!-- ── FINANCIAL TAB ── -->
     <div id="tab-financial-content" class="hidden">
-      <div class="bg-slate-900 border border-slate-700 rounded-xl p-6 mb-6">
+      <div class="bg-slate-900 border border-slate-700 rounded-xl p-6 mb-6 no-print">
         <label class="block text-sm text-slate-400 mb-2">YouTube URL</label>
         <input id="url-input-financial" type="text"
           placeholder="https://www.youtube.com/watch?v=..."
@@ -135,7 +165,13 @@
         </div>
       </div>
 
-      <div id="spinner-financial" class="items-center gap-3 text-slate-400 text-sm mb-6 hidden">
+      <div id="skeleton-financial" class="hidden space-y-3 mb-6 no-print">
+        <div class="h-4 bg-slate-800 rounded animate-pulse w-1/3"></div>
+        <div class="h-24 bg-slate-800 rounded animate-pulse"></div>
+        <div class="h-4 bg-slate-800 rounded animate-pulse w-2/3"></div>
+      </div>
+
+      <div id="spinner-financial" class="items-center gap-3 text-slate-400 text-sm mb-6 hidden no-print">
         <svg class="animate-spin h-5 w-5 text-sky-500" fill="none" viewBox="0 0 24 24">
           <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
           <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/>
@@ -144,7 +180,7 @@
       </div>
 
       <div id="error-box-financial" class="hidden bg-red-950 border border-red-800 text-red-300
-                                            rounded-lg px-4 py-3 text-sm mb-6">
+                                            rounded-lg px-4 py-3 text-sm mb-6 no-print">
         <div class="flex items-center justify-between gap-4">
           <span id="error-msg-financial"></span>
           <button onclick="retryLast('financial')"
@@ -157,41 +193,70 @@
         <div class="bg-slate-900 border border-slate-700 rounded-xl p-6">
           <div id="notes-content-financial" class="prose text-sm text-slate-300"></div>
         </div>
-        <div class="flex items-center justify-between gap-4 mt-2 flex-wrap">
+        <div class="flex items-center justify-between gap-4 mt-2 flex-wrap no-print">
           <p class="text-xs text-slate-600" id="result-meta-financial"></p>
           <div class="flex items-center gap-2">
             <button onclick="copyNotes('financial')"
               class="text-xs text-slate-400 hover:text-sky-400 border border-slate-700 hover:border-sky-700 px-3 py-1 rounded-lg transition">Copy</button>
             <button onclick="copyShareLink('financial')"
               class="text-xs text-slate-400 hover:text-sky-400 border border-slate-700 hover:border-sky-700 px-3 py-1 rounded-lg transition">Share</button>
+            <button onclick="printResult('financial')"
+              class="text-xs text-slate-400 hover:text-sky-400 border border-slate-700 hover:border-sky-700 px-3 py-1 rounded-lg transition">Print / PDF</button>
+            <button onclick="pinResult('financial')" id="pin-btn-financial"
+              class="text-xs text-slate-400 hover:text-amber-400 border border-slate-700 hover:border-amber-700 px-3 py-1 rounded-lg transition">☆ Pin</button>
             <button onclick="regenerate('financial')"
               class="text-xs text-slate-400 hover:text-sky-400 border border-slate-700 hover:border-sky-700 px-3 py-1 rounded-lg transition">Regenerate</button>
           </div>
         </div>
       </div>
 
-      <div id="playlist-box-financial" class="hidden">
-        <p id="playlist-status-financial" class="text-sm text-slate-400 mb-4"></p>
+      <div id="playlist-box-financial" class="hidden no-print">
+        <div class="flex items-center justify-between gap-4 mb-4">
+          <p id="playlist-status-financial" class="text-sm text-slate-400"></p>
+          <button id="playlist-download-financial" onclick="downloadPlaylist('financial')"
+            class="hidden shrink-0 text-xs text-slate-400 hover:text-sky-400 border border-slate-700 hover:border-sky-700 px-3 py-1 rounded-lg transition">
+            Download All (.md)
+          </button>
+        </div>
         <div id="playlist-results-financial" class="space-y-3"></div>
       </div>
     </div>
 
     <!-- ── HISTORY TAB ── -->
     <div id="tab-history-content" class="hidden">
-      <div class="flex items-center gap-3 mb-4">
+      <div class="flex items-center gap-3 mb-4 flex-wrap">
         <input id="history-search" type="text" placeholder="Search history…"
           oninput="renderHistory()"
-          class="flex-1 bg-slate-800 border border-slate-600 rounded-lg px-4 py-2 text-sm
+          class="flex-1 min-w-[160px] bg-slate-800 border border-slate-600 rounded-lg px-4 py-2 text-sm
                  focus:outline-none focus:border-sky-500 placeholder-slate-600" />
+        <select id="history-mode-filter" onchange="renderHistory()"
+          class="bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-sky-500">
+          <option value="">All types</option>
+          <option value="general">General</option>
+          <option value="stock">Financial</option>
+        </select>
         <button onclick="clearAllHistory()"
           class="shrink-0 text-xs text-slate-500 hover:text-red-400 border border-slate-700 hover:border-red-800 px-3 py-2 rounded-lg transition">
           Clear All
+        </button>
+      </div>
+      <div id="history-bulk-bar" class="hidden items-center gap-3 mb-4 text-xs text-slate-400">
+        <label class="flex items-center gap-2 cursor-pointer">
+          <input type="checkbox" id="history-select-all" onchange="toggleSelectAllHistory(this.checked)" />
+          Select all
+        </label>
+        <span id="history-selected-count"></span>
+        <button onclick="deleteSelectedHistory()"
+          class="text-red-400 hover:text-red-300 border border-red-900 hover:border-red-700 px-3 py-1 rounded-lg transition">
+          Delete Selected
         </button>
       </div>
       <div id="history-list" class="space-y-3"></div>
     </div>
 
   </main>
+
+  <div id="toast-container" class="no-print"></div>
 
 <script>
 const API = '';
@@ -217,12 +282,30 @@ async function init() {
   if (params.has('summary')) {
     const data = await fetch(`${API}/api/summaries/${params.get('summary')}`).then(r => r.json()).catch(() => null);
     if (data) {
-      const tab = /## Thesis/.test(data.notes || '') ? 'financial' : 'general';
+      const tab = tabForMode(data.mode, data.notes);
       document.getElementById(`url-input-${tab}`).value = data.url;
       showResult(tab, data);
       showTab(tab);
     }
   }
+
+  document.addEventListener('keydown', e => {
+    if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
+      const active = ['general','financial'].find(t =>
+        !document.getElementById(`tab-${t}-content`).classList.contains('hidden'));
+      if (active) doSummarize(active, false);
+    }
+    if (e.key === 'Escape') {
+      ['general','financial'].forEach(hideError);
+    }
+  });
+}
+
+function tabForMode(mode, notes) {
+  if (mode === 'stock') return 'financial';
+  if (mode === 'general') return 'general';
+  // Fallback for rows saved before the `mode` column existed.
+  return /## Thesis/.test(notes || '') ? 'financial' : 'general';
 }
 
 // ── Tab switching ─────────────────────────────────────────────────────
@@ -291,7 +374,8 @@ async function copyNotes(tab) {
   if (!data) return;
   try {
     await navigator.clipboard.writeText(data.notes || '');
-  } catch(e) { alert('Could not copy: ' + e.message); }
+    showToast('Copied notes to clipboard', 'success');
+  } catch(e) { showToast('Could not copy: ' + e.message, 'error'); }
 }
 
 async function copyShareLink(tab) {
@@ -300,7 +384,32 @@ async function copyShareLink(tab) {
   const link = `${location.origin}/?summary=${data.id}`;
   try {
     await navigator.clipboard.writeText(link);
-  } catch(e) { alert('Could not copy: ' + e.message); }
+    showToast('Share link copied', 'success');
+  } catch(e) { showToast('Could not copy: ' + e.message, 'error'); }
+}
+
+function printResult(tab) {
+  const data = _lastResult[tab];
+  if (!data) return;
+  document.title = data.title || 'Nutshell summary';
+  window.print();
+}
+
+async function pinResult(tab) {
+  const data = _lastResult[tab];
+  if (!data) return;
+  const nowPinned = !data.pinned;
+  try {
+    await fetch(`${API}/api/summaries/${data.id}/pin`, {
+      method: 'PATCH',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({pinned: nowPinned}),
+    });
+    data.pinned = nowPinned;
+    const btn = document.getElementById(`pin-btn-${tab}`);
+    btn.textContent = nowPinned ? '★ Pinned' : '☆ Pin';
+    showToast(nowPinned ? 'Pinned to top of history' : 'Unpinned', 'success');
+  } catch(e) { showToast('Could not update pin: ' + e.message, 'error'); }
 }
 
 // ── URL input detection ───────────────────────────────────────────────
@@ -311,6 +420,8 @@ function onUrlInput(tab) {
 }
 
 // ── Playlist ──────────────────────────────────────────────────────────
+let _playlistVideos = {};  // tab -> array of completed video summary data
+
 async function doPlaylist(tab) {
   const url = document.getElementById(`url-input-${tab}`).value.trim();
   if (!url) return;
@@ -320,7 +431,9 @@ async function doPlaylist(tab) {
   document.getElementById(`playlist-box-${tab}`).classList.remove('hidden');
   document.getElementById(`playlist-results-${tab}`).innerHTML = '';
   document.getElementById(`playlist-status-${tab}`).textContent = 'Fetching playlist…';
+  document.getElementById(`playlist-download-${tab}`).classList.add('hidden');
   document.getElementById(`error-box-${tab}`).classList.add('hidden');
+  _playlistVideos[tab] = [];
 
   try {
     const res = await fetch(`${API}/api/summarize/playlist`, {
@@ -360,6 +473,9 @@ async function doPlaylist(tab) {
           _appendPlaylistError(tab, msg);
         } else if (msg.type === 'done') {
           document.getElementById(`playlist-status-${tab}`).textContent = 'Done.';
+          if (_playlistVideos[tab]?.length) {
+            document.getElementById(`playlist-download-${tab}`).classList.remove('hidden');
+          }
         }
       }
     }
@@ -370,6 +486,7 @@ async function doPlaylist(tab) {
 }
 
 function _appendPlaylistVideo(tab, data) {
+  (_playlistVideos[tab] ||= []).push(data);
   const thesis = extractThesis(data.notes);
   const el = document.createElement('div');
   el.className = 'bg-slate-900 border border-slate-700 rounded-xl p-4 cursor-pointer hover:border-sky-700 transition';
@@ -385,6 +502,20 @@ function _appendPlaylistVideo(tab, data) {
     <p class="text-sm text-slate-200">${thesis}</p>
     <p class="text-xs text-slate-600 mt-1 truncate">${data.url}</p>`;
   document.getElementById(`playlist-results-${tab}`).appendChild(el);
+}
+
+function downloadPlaylist(tab) {
+  const videos = _playlistVideos[tab] || [];
+  if (!videos.length) return;
+  const md = videos.map(v =>
+    `# ${v.title || v.video_id}\n\n${v.url}\n\n${v.notes}\n`
+  ).join('\n---\n\n');
+  const blob = new Blob([md], {type: 'text/markdown'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `nutshell-playlist-${tab}-${Date.now()}.md`;
+  a.click();
+  URL.revokeObjectURL(a.href);
 }
 
 function _appendPlaylistError(tab, data) {
@@ -425,18 +556,22 @@ function showResult(tab, data) {
   document.getElementById(`notes-content-${tab}`).innerHTML = marked.parse(data.notes || '');
   document.getElementById(`result-meta-${tab}`).textContent =
     `${data.word_count?.toLocaleString()} words · ${data.cached ? 'cached transcript' : 'fresh transcript'} · ID: ${data.id}`;
+  const pinBtn = document.getElementById(`pin-btn-${tab}`);
+  if (pinBtn) pinBtn.textContent = data.pinned ? '★ Pinned' : '☆ Pin';
   document.getElementById(`result-box-${tab}`).classList.remove('hidden');
 }
 
 // ── History ───────────────────────────────────────────────────────────
-let _historyNotes = {};
-let _historyRows  = [];
+let _historyNotes    = {};
+let _historyRows     = [];
+let _selectedHistory = new Set();
 
 async function loadHistory() {
   const list = document.getElementById('history-list');
   list.innerHTML = '<p class="text-slate-600 text-sm">Loading...</p>';
   try {
     _historyRows = await fetch(`${API}/api/history`).then(r => r.json());
+    _selectedHistory.clear();
     renderHistory();
   } catch(e) {
     list.innerHTML = `<p class="text-red-400 text-sm">${e.message}</p>`;
@@ -444,14 +579,20 @@ async function loadHistory() {
 }
 
 function renderHistory() {
-  const list  = document.getElementById('history-list');
-  const query = (document.getElementById('history-search')?.value || '').trim().toLowerCase();
-  const rows  = query
-    ? _historyRows.filter(r =>
-        (r.title || '').toLowerCase().includes(query) ||
-        (r.notes || '').toLowerCase().includes(query) ||
-        (r.url   || '').toLowerCase().includes(query))
-    : _historyRows;
+  const list       = document.getElementById('history-list');
+  const query      = (document.getElementById('history-search')?.value || '').trim().toLowerCase();
+  const modeFilter = document.getElementById('history-mode-filter')?.value || '';
+
+  let rows = _historyRows;
+  if (modeFilter) rows = rows.filter(r => (r.mode || 'general') === modeFilter);
+  if (query) {
+    rows = rows.filter(r =>
+      (r.title || '').toLowerCase().includes(query) ||
+      (r.notes || '').toLowerCase().includes(query) ||
+      (r.url   || '').toLowerCase().includes(query));
+  }
+
+  updateBulkBar();
 
   if (!_historyRows.length) {
     list.innerHTML = '<p class="text-slate-600 text-sm">No summaries yet.</p>';
@@ -465,22 +606,30 @@ function renderHistory() {
   _historyNotes = {};
   list.innerHTML = rows.map(r => {
     _historyNotes[r.id] = r.notes || '';
-    const thesis = extractThesis(r.notes);
-    const date   = r.created_at.slice(0,16).replace('T',' ');
+    const thesis   = extractThesis(r.notes);
+    const date     = r.created_at.slice(0,16).replace('T',' ');
+    const typeName = (r.mode || 'general') === 'stock' ? 'Financial' : 'General';
+    const checked  = _selectedHistory.has(r.id) ? 'checked' : '';
+    const pinStar  = r.pinned ? '★' : '☆';
     return `
-      <div class="bg-slate-900 border border-slate-700 rounded-xl p-4" id="history-item-${r.id}">
-        <div class="flex items-start justify-between gap-4 cursor-pointer hover:opacity-90"
-             onclick="toggleHistoryItem('${r.id}')">
+      <div class="bg-slate-900 border rounded-xl p-4 ${r.pinned ? 'border-amber-700' : 'border-slate-700'}" id="history-item-${r.id}">
+        <div class="flex items-start justify-between gap-4">
           <div class="flex items-start gap-3 min-w-0">
-            ${_thumbHtml(r.thumbnail_url)}
-            <div class="min-w-0">
-              ${r.title ? `<p class="text-sm text-slate-200 font-medium truncate">${escapeHtml(r.title)}</p>` : ''}
-              <p class="text-xs text-slate-500 mb-1">${date} · ${r.brief ? 'brief' : 'full'} · ${r.word_count?.toLocaleString()} words</p>
-              <p class="text-sm text-slate-200">${thesis}</p>
-              <p class="text-xs text-slate-600 mt-1 truncate max-w-lg">${r.url}</p>
+            <input type="checkbox" class="mt-1 shrink-0" ${checked}
+              onchange="toggleSelectHistory('${r.id}', this.checked)" />
+            <div class="cursor-pointer flex items-start gap-3 min-w-0" onclick="toggleHistoryItem('${r.id}')">
+              ${_thumbHtml(r.thumbnail_url)}
+              <div class="min-w-0">
+                ${r.title ? `<p class="text-sm text-slate-200 font-medium truncate">${escapeHtml(r.title)}</p>` : ''}
+                <p class="text-xs text-slate-500 mb-1">${date} · ${typeName} · ${r.brief ? 'brief' : 'full'} · ${r.word_count?.toLocaleString()} words</p>
+                <p class="text-sm text-slate-200">${thesis}</p>
+                <p class="text-xs text-slate-600 mt-1 truncate max-w-lg">${r.url}</p>
+              </div>
             </div>
           </div>
           <div class="flex items-center gap-3 shrink-0">
+            <button onclick="event.stopPropagation(); toggleHistoryPin('${r.id}')"
+              title="Pin" class="text-amber-400 hover:text-amber-300 text-sm">${pinStar}</button>
             <span class="text-xs text-slate-600">${r.id}</span>
             <button onclick="event.stopPropagation(); deleteHistoryItem('${r.id}')"
               title="Delete"
@@ -494,6 +643,62 @@ function renderHistory() {
   }).join('');
 }
 
+function updateBulkBar() {
+  const bar = document.getElementById('history-bulk-bar');
+  const count = _selectedHistory.size;
+  document.getElementById('history-selected-count').textContent =
+    count ? `${count} selected` : '';
+  bar.classList.toggle('hidden', count === 0);
+  bar.classList.toggle('flex', count > 0);
+}
+
+function toggleSelectHistory(id, checked) {
+  if (checked) _selectedHistory.add(id); else _selectedHistory.delete(id);
+  updateBulkBar();
+}
+
+function toggleSelectAllHistory(checked) {
+  document.querySelectorAll('#history-list input[type=checkbox]').forEach(cb => {
+    cb.checked = checked;
+    const id = cb.closest('[id^="history-item-"]').id.replace('history-item-', '');
+    if (checked) _selectedHistory.add(id); else _selectedHistory.delete(id);
+  });
+  updateBulkBar();
+}
+
+async function deleteSelectedHistory() {
+  const ids = [..._selectedHistory];
+  if (!ids.length) return;
+  if (!confirm(`Delete ${ids.length} selected entries?`)) return;
+  try {
+    await Promise.all(ids.map(id => fetch(`${API}/api/summaries/${id}`, {method: 'DELETE'})));
+    _historyRows = _historyRows.filter(r => !_selectedHistory.has(r.id));
+    _selectedHistory.clear();
+    renderHistory();
+    showToast(`Deleted ${ids.length} entries`, 'success');
+  } catch(e) {
+    showToast(e.message, 'error');
+  }
+}
+
+async function toggleHistoryPin(id) {
+  const row = _historyRows.find(r => r.id === id);
+  if (!row) return;
+  const nowPinned = !row.pinned;
+  try {
+    await fetch(`${API}/api/summaries/${id}/pin`, {
+      method: 'PATCH',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({pinned: nowPinned}),
+    });
+    row.pinned = nowPinned;
+    _historyRows.sort((a, b) => (b.pinned - a.pinned) || (b.created_at > a.created_at ? 1 : -1));
+    renderHistory();
+  } catch(e) {
+    showToast('Could not update pin: ' + e.message, 'error');
+  }
+}
+
 async function clearAllHistory() {
   if (!_historyRows.length) return;
   if (!confirm(`Delete all ${_historyRows.length} history entries? This can't be undone.`)) return;
@@ -501,9 +706,10 @@ async function clearAllHistory() {
     await fetch(`${API}/api/history`, {method: 'DELETE'});
     _historyRows = [];
     _historyNotes = {};
+    _selectedHistory.clear();
     renderHistory();
   } catch(e) {
-    alert(e.message);
+    showToast(e.message, 'error');
   }
 }
 
@@ -523,6 +729,7 @@ async function deleteHistoryItem(id) {
     await fetch(`${API}/api/summaries/${id}`, {method: 'DELETE'});
     delete _historyNotes[id];
     _historyRows = _historyRows.filter(r => r.id !== id);
+    _selectedHistory.delete(id);
     const el = document.getElementById(`history-item-${id}`);
     if (el) el.remove();
     const list = document.getElementById('history-list');
@@ -530,7 +737,7 @@ async function deleteHistoryItem(id) {
       list.innerHTML = '<p class="text-slate-600 text-sm">No summaries yet.</p>';
     }
   } catch(e) {
-    alert(e.message);
+    showToast(e.message, 'error');
   }
 }
 
@@ -546,6 +753,7 @@ function setSpinner(tab, on, msg = '') {
   el.classList.toggle('hidden', !on);
   el.classList.toggle('active', on);
   if (msg) document.getElementById(`spinner-msg-${tab}`).textContent = msg;
+  document.getElementById(`skeleton-${tab}`).classList.toggle('hidden', !on);
 }
 
 function showError(tab, msg) {
@@ -555,6 +763,16 @@ function showError(tab, msg) {
 
 function hideError(tab) {
   document.getElementById(`error-box-${tab}`).classList.add('hidden');
+}
+
+// ── Toasts ────────────────────────────────────────────────────────────
+function showToast(msg, type = 'info') {
+  const container = document.getElementById('toast-container');
+  const el = document.createElement('div');
+  el.className = `toast toast-${type}`;
+  el.textContent = msg;
+  container.appendChild(el);
+  setTimeout(() => el.remove(), 3000);
 }
 
 // Enter key submits

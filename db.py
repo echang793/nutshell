@@ -24,6 +24,8 @@ _SCHEMA_STMTS = [
         notes       TEXT    NOT NULL,
         brief       INTEGER NOT NULL DEFAULT 0,
         word_count  INTEGER NOT NULL DEFAULT 0,
+        mode        TEXT    NOT NULL DEFAULT 'general',
+        pinned      INTEGER NOT NULL DEFAULT 0,
         created_at  TEXT    NOT NULL
     )""",
     "CREATE INDEX IF NOT EXISTS idx_created ON summaries(created_at DESC)",
@@ -148,14 +150,14 @@ _MAX_SUMMARIES = 1000
 
 def save_summary(id: str, video_id: str, url: str, notes: str,
                  brief: bool, word_count: int,
-                 title: str = "", thumbnail_url: str = "") -> None:
+                 title: str = "", thumbnail_url: str = "", mode: str = "general") -> None:
     with _conn() as c:
         c.execute(
             """INSERT OR REPLACE INTO summaries
-               (id, video_id, url, title, thumbnail_url, notes, brief, word_count, created_at)
-               VALUES (?,?,?,?,?,?,?,?,?)""",
+               (id, video_id, url, title, thumbnail_url, notes, brief, word_count, mode, created_at)
+               VALUES (?,?,?,?,?,?,?,?,?,?)""",
             (id, video_id, url, title, thumbnail_url, notes, int(brief), word_count,
-             datetime.now().isoformat()),
+             mode, datetime.now().isoformat()),
         )
         c.execute(
             """DELETE FROM summaries WHERE id IN (
@@ -176,7 +178,7 @@ def get_summary(id: str) -> dict | None:
 def get_history(limit: int = 50) -> list[dict]:
     with _conn() as c:
         rows = c.execute(
-            "SELECT * FROM summaries ORDER BY created_at DESC LIMIT ?", (limit,)
+            "SELECT * FROM summaries ORDER BY pinned DESC, created_at DESC LIMIT ?", (limit,)
         ).fetchall()
     return [_row_to_dict(r) for r in rows]
 
@@ -184,6 +186,11 @@ def get_history(limit: int = 50) -> list[dict]:
 def delete_summary(id: str) -> None:
     with _conn() as c:
         c.execute("DELETE FROM summaries WHERE id=?", (id,))
+
+
+def set_pinned(id: str, pinned: bool) -> None:
+    with _conn() as c:
+        c.execute("UPDATE summaries SET pinned=? WHERE id=?", (int(pinned), id))
 
 
 def clear_history() -> None:
@@ -203,5 +210,6 @@ def get_monthly_summary_count() -> int:
 
 def _row_to_dict(row) -> dict:
     d = dict(row)
-    d["brief"] = bool(d.get("brief", 0))
+    d["brief"]  = bool(d.get("brief", 0))
+    d["pinned"] = bool(d.get("pinned", 0))
     return d

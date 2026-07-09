@@ -113,7 +113,7 @@ async def api_summarize(req: SummarizeRequest):
 
     await run_in_threadpool(
         db.save_summary, sid, video_id, req.url, notes, req.brief, word_count,
-        title, thumb_url
+        title, thumb_url, mode
     )
 
     return {
@@ -126,6 +126,7 @@ async def api_summarize(req: SummarizeRequest):
         "brief":         req.brief,
         "word_count":    word_count,
         "cached":        cached,
+        "mode":          mode,
     }
 
 
@@ -142,6 +143,18 @@ def api_delete_summary(sid: str):
     if not db.get_summary(sid):
         raise HTTPException(404, "Summary not found.")
     db.delete_summary(sid)
+    return {"ok": True}
+
+
+class PinRequest(BaseModel):
+    pinned: bool
+
+
+@app.patch("/api/summaries/{sid}/pin")
+def api_pin_summary(sid: str, req: PinRequest):
+    if not db.get_summary(sid):
+        raise HTTPException(404, "Summary not found.")
+    db.set_pinned(sid, req.pinned)
     return {"ok": True}
 
 
@@ -198,7 +211,7 @@ async def api_summarize_playlist(req: PlaylistRequest):
                 sid       = str(uuid.uuid4())[:8]
                 await run_in_threadpool(
                     db.save_summary, sid, vid, vid_url, notes, req.brief,
-                    len(transcript.split()), title, thumb_url
+                    len(transcript.split()), title, thumb_url, mode
                 )
                 payload = {
                     "type": "video", "index": i, "total": len(video_ids),
