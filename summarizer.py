@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import re
 import time
 from pathlib import Path
@@ -182,46 +183,99 @@ def get_playlist_video_ids(playlist_id: str) -> list[str]:
         raise RuntimeError(f"yt-dlp failed: {e.stderr.strip()}")
 
 
+def _clean(text: str) -> str:
+    text = re.sub(r"\[.*?\]", "", text)
+    return re.sub(r"\s+", " ", text).strip()
+
+
+def _group_into_lines(raw_segments: list[dict], max_chars: int = 130) -> list[dict]:
+    """Merge small transcript fragments into readable sentence-ish lines with a
+    start timestamp each, for a per-line timestamped transcript display."""
+    lines: list[dict] = []
+    buf, buf_start = [], None
+    for seg in raw_segments:
+        text = _clean(seg["text"])
+        if not text:
+            continue
+        if buf_start is None:
+            buf_start = seg["start"]
+        buf.append(text)
+        joined = " ".join(buf)
+        if joined.rstrip().endswith((".", "?", "!")) or len(joined) >= max_chars:
+            lines.append({"start": int(buf_start), "text": joined})
+            buf, buf_start = [], None
+    if buf:
+        lines.append({"start": int(buf_start), "text": " ".join(buf)})
+    return lines
+
+
+def _synthetic_lines(text: str, words_per_line: int = 16, wpm: int = 155) -> list[dict]:
+    """Fallback for transcript sources that only return flat text (no per-segment
+    timing): split into evenly-paced lines using an average speaking rate."""
+    words = text.split()
+    lines = []
+    for i in range(0, len(words), words_per_line):
+        chunk = " ".join(words[i:i + words_per_line])
+        start = int((i / wpm) * 60)
+        lines.append({"start": start, "text": chunk})
+    return lines
+
+
 def fetch_transcript(video_id: str, api_key: str, model: str = GROQ_MODEL,
-                      usage_cb=None, usage_sync_cb=None) -> tuple[str, bool]:
-    """Return (transcript_text, from_cache). usage_cb(tokens:int) fires for any
-    Groq call made along the way (only happens if translation is needed)."""
+                      usage_cb=None, usage_sync_cb=None) -> tuple[str, bool, list[dict]]:
+    """Return (transcript_text, from_cache, lines). `lines` is a list of
+    {start:int seconds, text:str} for a timestamped transcript display —
+    real per-segment timing when the source provides it, evenly-paced
+    synthetic timing otherwise. usage_cb(tokens:int) fires for any Groq call
+    made along the way (only happens if translation is needed)."""
     import os
     CACHE_DIR.mkdir(parents=True, exist_ok=True)
-    cache = CACHE_DIR / f"{video_id}.txt"
+    cache = CACHE_DIR / f"{video_id}.json"
     if cache.exists():
-        return cache.read_text(), True
+        data = json.loads(cache.read_text())
+        return data["text"], True, data["lines"]
 
     supadata_key = os.environ.get("SUPADATA_API_KEY", "")
     if supadata_key:
-        text = _fetch_via_supadata(video_id, supadata_key)
+        text, lines = _fetch_via_supadata(video_id, supadata_key)
     else:
-        text = _fetch_via_yt_api(video_id, api_key, model, usage_cb, usage_sync_cb)
+        text, lines = _fetch_via_yt_api(video_id, api_key, model, usage_cb, usage_sync_cb)
 
-    cache.write_text(text)
-    return text, False
+    cache.write_text(json.dumps({"text": text, "lines": lines}))
+    return text, False, lines
 
 
-def _fetch_via_supadata(video_id: str, supadata_key: str) -> str:
+def _fetch_via_supadata(video_id: str, supadata_key: str) -> tuple[str, list[dict]]:
     import requests
     resp = requests.get(
         "https://api.supadata.ai/v1/youtube/transcript",
-        params={"videoId": video_id, "text": "true"},
+        params={"videoId": video_id},
         headers={"x-api-key": supadata_key},
         timeout=30,
     )
     if not resp.ok:
         raise ValueError(f"Supadata error {resp.status_code}: {resp.text[:200]}")
     data = resp.json()
-    text = data.get("content") or data.get("text") or ""
-    if not text:
+
+    content = data.get("content")
+    if isinstance(content, list) and content:
+        # Chunked response: [{text, offset, duration, lang}], offset in ms.
+        raw = [{"start": c.get("offset", 0) / 1000, "text": c.get("text", "")} for c in content]
+        text = _clean(" ".join(c.get("text", "") for c in content))
+        lines = _group_into_lines(raw)
+        if not text:
+            raise ValueError("Supadata returned an empty transcript.")
+        return text, lines
+
+    flat = content if isinstance(content, str) else data.get("text", "")
+    flat = _clean(flat)
+    if not flat:
         raise ValueError("Supadata returned an empty transcript.")
-    text = re.sub(r"\[.*?\]", "", text)
-    return re.sub(r"\s+", " ", text).strip()
+    return flat, _synthetic_lines(flat)
 
 
 def _fetch_via_yt_api(video_id: str, api_key: str, model: str,
-                       usage_cb=None, usage_sync_cb=None) -> str:
+                       usage_cb=None, usage_sync_cb=None) -> tuple[str, list[dict]]:
     from youtube_transcript_api import YouTubeTranscriptApi
     api        = YouTubeTranscriptApi()
     translated = False
@@ -243,15 +297,20 @@ def _fetch_via_yt_api(video_id: str, api_key: str, model: str,
             except Exception as e:
                 raise ValueError(f"Could not fetch transcript: {e}")
 
-    text = " ".join(s.text for s in segments)
-    text = re.sub(r"\[.*?\]", "", text)
-    text = re.sub(r"\s+", " ", text).strip()
+    raw  = [{"start": s.start, "text": s.text} for s in segments]
+    text = _clean(" ".join(s.text for s in segments))
 
     if translated:
         text = _call_groq(_TRANSLATE_PROMPT.format(transcript=text[:MAX_TRANSCRIPT_CHARS]),
                           api_key, model, max_tokens=1200,
                           usage_cb=usage_cb, usage_sync_cb=usage_sync_cb)
-    return text
+        # Translated text no longer lines up with the original-language segment
+        # timings word-for-word, so fall back to evenly-paced lines for display.
+        lines = _synthetic_lines(text)
+    else:
+        lines = _group_into_lines(raw)
+
+    return text, lines
 
 
 def _call_groq(prompt: str, api_key: str, model: str, max_tokens: int = 2048,
@@ -311,5 +370,3 @@ def summarize(transcript: str, api_key: str, model: str = GROQ_MODEL,
     prompt = template.format(transcript=transcript)
     return _call_groq(prompt, api_key, model, max_tokens=max_tokens,
                        system_prompt=system_prompt, usage_cb=usage_cb, usage_sync_cb=usage_sync_cb)
-
-

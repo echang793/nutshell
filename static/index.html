@@ -1,822 +1,758 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Nutshell — YouTube Video Summarizer</title>
-  <script src="https://cdn.tailwindcss.com"></script>
-  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
-  <style>
-    body { background: #0f1117; color: #e2e8f0; }
-    .prose h2 { color: #38bdf8; font-size: 1.1rem; font-weight: 700; margin: 1.2rem 0 0.4rem; border-bottom: 1px solid #1e293b; padding-bottom: 0.2rem; }
-    .prose ul { list-style: disc; padding-left: 1.5rem; }
-    .prose li { margin: 0.25rem 0; }
-    .prose strong { color: #f0f9ff; }
-    .prose p { margin: 0.4rem 0; line-height: 1.6; }
-    #spinner-general.active, #spinner-financial.active { display:flex; }
-    #spinner-general, #spinner-financial { display:none; }
-    #toast-container { position: fixed; bottom: 1.25rem; right: 1.25rem; z-index: 100;
-      display: flex; flex-direction: column; gap: 0.5rem; }
-    .toast { padding: 0.6rem 1rem; border-radius: 0.5rem; font-size: 0.8rem; max-width: 320px;
-      box-shadow: 0 4px 12px rgba(0,0,0,0.4); animation: toast-in 0.15s ease-out; }
-    .toast-success { background: #14532d; color: #86efac; border: 1px solid #166534; }
-    .toast-error   { background: #450a0a; color: #fca5a5; border: 1px solid #7f1d1d; }
-    .toast-info    { background: #1e293b; color: #cbd5e1; border: 1px solid #334155; }
-    @keyframes toast-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
-    @media print {
-      header, nav, .no-print { display: none !important; }
-      body { background: white; color: black; }
-      .prose h2 { color: #0f172a; }
-      .prose strong { color: #0f172a; }
-    }
-  </style>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Nutshell — hours in, seconds out</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Sora:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+html,body{margin:0;height:100%;background:#0A0618;font-family:'Sora',sans-serif;overflow:hidden}
+a{color:#67E8F9;text-decoration:none}a:hover{color:#A5F3FC}
+input{outline:none}
+::selection{background:rgba(168,85,247,.45);color:#fff}
+*{box-sizing:border-box}
+@keyframes nsPulse{0%,100%{transform:scaleY(.35);opacity:.55}50%{transform:scaleY(1);opacity:1}}
+@keyframes nsShimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}
+@keyframes nsDriftA{0%,100%{transform:translate(0,0) scale(1)}50%{transform:translate(90px,60px) scale(1.15)}}
+@keyframes nsDriftB{0%,100%{transform:translate(0,0) scale(1)}50%{transform:translate(-70px,-40px) scale(1.1)}}
+@keyframes nsBlink{0%,100%{opacity:1}50%{opacity:.25}}
+@keyframes nsGlow{0%,100%{box-shadow:0 0 18px rgba(34,211,238,.22)}50%{box-shadow:0 0 36px rgba(34,211,238,.5)}}
+@keyframes nsHiGlow{0%,100%{box-shadow:0 0 22px rgba(168,85,247,.3)}50%{box-shadow:0 0 44px rgba(168,85,247,.6)}}
+@keyframes nsSpin{to{transform:translate(-50%,-50%) rotate(360deg)}}
+@keyframes nsTwinkle{0%,100%{opacity:.08;transform:scale(.6)}50%{opacity:.85;transform:scale(1)}}
+@keyframes nsOrbit{from{transform:rotate(0deg) translateX(86px)}to{transform:rotate(360deg) translateX(86px)}}
+@keyframes nsOrbit2{from{transform:rotate(0deg) translateX(86px)}to{transform:rotate(-360deg) translateX(86px)}}
+.panel{background:rgba(255,255,255,.045);border:1px solid rgba(255,255,255,.09);border-radius:20px;backdrop-filter:blur(20px);transition:border-color .3s ease,box-shadow .35s ease}
+.panel:hover{border-color:rgba(103,232,249,.25);box-shadow:0 10px 44px rgba(124,58,237,.2)}
+.reveal{opacity:0;transform:translateY(30px) scale(.92);transition:opacity .85s cubic-bezier(.16,1.35,.3,1),transform .85s cubic-bezier(.16,1.35,.3,1)}
+.reveal.in{opacity:1;transform:translateY(0) scale(1)}
+.grad-btn{background:linear-gradient(90deg,#7C3AED,#22D3EE);color:#fff;font-weight:700;cursor:pointer;transition:filter .25s,box-shadow .25s}
+.grad-btn:hover{filter:brightness(1.15)}
+.ghost-btn{border:1px solid rgba(255,255,255,.15);color:rgba(230,225,245,.75);cursor:pointer;transition:background .2s}
+.ghost-btn:hover{background:rgba(255,255,255,.06)}
+.scrollbar-none{scrollbar-width:none}
+.scrollbar-none::-webkit-scrollbar{display:none}
+#toastEl{position:absolute;z-index:58;left:50%;bottom:26px;transform:translate(-50%,18px);opacity:0;transition:all .5s cubic-bezier(.2,1.4,.35,1);padding:10px 18px;border-radius:999px;background:rgba(20,12,42,.95);border:1px solid rgba(103,232,249,.4);font-size:12px;color:#E6E1F5;box-shadow:0 8px 40px rgba(34,211,238,.25);pointer-events:none;white-space:nowrap}
+#toastEl.show{transform:translate(-50%,0);opacity:1}
+</style>
 </head>
-<body class="min-h-screen font-mono">
+<body>
 
-  <!-- Header -->
-  <header class="border-b border-slate-800 px-6 py-4 flex items-center justify-between">
-    <div>
-      <h1 class="text-lg font-bold text-sky-400">Nutshell</h1>
-      <p class="text-xs text-slate-500">AI summaries for any YouTube video</p>
-    </div>
-    <nav class="flex items-center gap-4 text-sm">
-      <button onclick="showTab('general')" id="tab-general"
-        class="tab-btn text-sky-400 border-b border-sky-400 pb-1">General</button>
-      <button onclick="showTab('financial')" id="tab-financial"
-        class="tab-btn text-slate-500 hover:text-slate-300 pb-1">Financial</button>
-      <button onclick="showTab('history')" id="tab-history"
-        class="tab-btn text-slate-500 hover:text-slate-300 pb-1">History</button>
-    </nav>
-  </header>
+<div id="root" style="position:relative;height:100vh;background:#0A0618;color:#E6E1F5;overflow:hidden">
 
-  <main class="max-w-4xl mx-auto px-4 py-8">
+  <!-- mesh blobs -->
+  <div style="position:absolute;width:560px;height:560px;left:-120px;top:-140px;border-radius:50%;background:radial-gradient(circle,rgba(124,58,237,.5),transparent 65%);filter:blur(70px);animation:nsDriftA 14s ease-in-out infinite"></div>
+  <div style="position:absolute;width:520px;height:520px;right:-100px;bottom:-160px;border-radius:50%;background:radial-gradient(circle,rgba(34,211,238,.38),transparent 65%);filter:blur(70px);animation:nsDriftB 17s ease-in-out infinite"></div>
+  <div style="position:absolute;width:420px;height:420px;left:44%;top:36%;border-radius:50%;background:radial-gradient(circle,rgba(168,85,247,.28),transparent 65%);filter:blur(80px);animation:nsDriftA 21s ease-in-out infinite reverse"></div>
+  <div id="twinkles" style="position:absolute;inset:0;pointer-events:none"></div>
 
-    <!-- Supadata + Groq quota (shared, mode-agnostic) -->
-    <div id="quota-line" class="mb-4 text-xs text-slate-600 hidden no-print space-y-0.5">
-      <p id="quota-text"></p>
-      <p id="groq-quota-text"></p>
-    </div>
+  <!-- bento grid -->
+  <div id="grid" style="position:relative;height:100%;display:grid;grid-template-columns:repeat(12,1fr);grid-template-rows:96px 1fr 1fr;gap:16px;padding:20px">
 
-    <!-- ── GENERAL TAB ── -->
-    <div id="tab-general-content">
-      <div class="bg-slate-900 border border-slate-700 rounded-xl p-6 mb-6 no-print">
-        <label class="block text-sm text-slate-400 mb-2">YouTube URL</label>
-        <input id="url-input-general" type="text"
-          placeholder="https://www.youtube.com/watch?v=..."
-          oninput="onUrlInput('general')"
-          class="w-full bg-slate-800 border border-slate-600 rounded-lg px-4 py-3 text-sm
-                 focus:outline-none focus:border-sky-500 placeholder-slate-600 mb-4" />
-
-        <div class="flex items-center gap-4 flex-wrap">
-          <button onclick="doSummarize('general', false)"
-            class="bg-sky-600 hover:bg-sky-500 text-white px-5 py-2 rounded-lg text-sm font-medium transition">
-            Full Notes
-          </button>
-          <button onclick="doSummarize('general', true)"
-            class="bg-slate-700 hover:bg-slate-600 text-white px-5 py-2 rounded-lg text-sm font-medium transition">
-            Brief TL;DR
-          </button>
-          <button id="playlist-btn-general" onclick="doPlaylist('general')"
-            class="hidden bg-violet-700 hover:bg-violet-600 text-white px-5 py-2 rounded-lg text-sm font-medium transition">
-            Summarize Playlist
-          </button>
-        </div>
+    <!-- brand -->
+    <div class="panel reveal" style="grid-column:span 3;display:flex;align-items:center;gap:12px;padding:0 20px;transition-delay:.05s">
+      <div style="width:44px;height:44px;border-radius:14px;background:linear-gradient(135deg,#7C3AED,#22D3EE);display:grid;place-items:center;animation:nsGlow 3s ease-in-out infinite">
+        <svg width="22" height="22" viewBox="0 0 20 20"><path d="M10 1.5c3.6 0 6.5 2.6 6.5 6.2 0 4.4-3.4 6.6-4.6 9.6-.3.8-.9 1.2-1.9 1.2s-1.6-.4-1.9-1.2C6.9 14.3 3.5 12.1 3.5 7.7 3.5 4.1 6.4 1.5 10 1.5Z" fill="none" stroke="#fff" stroke-width="1.6"></path></svg>
       </div>
-
-      <div id="skeleton-general" class="hidden space-y-3 mb-6 no-print">
-        <div class="h-4 bg-slate-800 rounded animate-pulse w-1/3"></div>
-        <div class="h-24 bg-slate-800 rounded animate-pulse"></div>
-        <div class="h-4 bg-slate-800 rounded animate-pulse w-2/3"></div>
-      </div>
-
-      <div id="spinner-general" class="items-center gap-3 text-slate-400 text-sm mb-6 hidden no-print">
-        <svg class="animate-spin h-5 w-5 text-sky-500" fill="none" viewBox="0 0 24 24">
-          <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
-          <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/>
-        </svg>
-        <span id="spinner-msg-general">Fetching transcript...</span>
-      </div>
-
-      <div id="error-box-general" class="hidden bg-red-950 border border-red-800 text-red-300
-                                          rounded-lg px-4 py-3 text-sm mb-6 no-print">
-        <div class="flex items-center justify-between gap-4">
-          <span id="error-msg-general"></span>
-          <button onclick="retryLast('general')"
-            class="shrink-0 bg-red-900 hover:bg-red-800 text-red-200 px-3 py-1 rounded-lg text-xs">Retry</button>
-        </div>
-      </div>
-
-      <div id="result-box-general" class="hidden">
-        <div id="result-header-general" class="hidden items-center gap-3 mb-3"></div>
-        <div class="bg-slate-900 border border-slate-700 rounded-xl p-6">
-          <div id="notes-content-general" class="prose text-sm text-slate-300"></div>
-        </div>
-        <div class="flex items-center justify-between gap-4 mt-2 flex-wrap no-print">
-          <p class="text-xs text-slate-600" id="result-meta-general"></p>
-          <div class="flex items-center gap-2">
-            <button onclick="copyNotes('general')"
-              class="text-xs text-slate-400 hover:text-sky-400 border border-slate-700 hover:border-sky-700 px-3 py-1 rounded-lg transition">Copy</button>
-            <button onclick="copyShareLink('general')"
-              class="text-xs text-slate-400 hover:text-sky-400 border border-slate-700 hover:border-sky-700 px-3 py-1 rounded-lg transition">Share</button>
-            <button onclick="printResult('general')"
-              class="text-xs text-slate-400 hover:text-sky-400 border border-slate-700 hover:border-sky-700 px-3 py-1 rounded-lg transition">Print / PDF</button>
-            <button onclick="pinResult('general')" id="pin-btn-general"
-              class="text-xs text-slate-400 hover:text-amber-400 border border-slate-700 hover:border-amber-700 px-3 py-1 rounded-lg transition">☆ Pin</button>
-            <button onclick="regenerate('general')"
-              class="text-xs text-slate-400 hover:text-sky-400 border border-slate-700 hover:border-sky-700 px-3 py-1 rounded-lg transition">Regenerate</button>
-          </div>
-        </div>
-      </div>
-
-      <div id="playlist-box-general" class="hidden no-print">
-        <div class="flex items-center justify-between gap-4 mb-4">
-          <p id="playlist-status-general" class="text-sm text-slate-400"></p>
-          <button id="playlist-download-general" onclick="downloadPlaylist('general')"
-            class="hidden shrink-0 text-xs text-slate-400 hover:text-sky-400 border border-slate-700 hover:border-sky-700 px-3 py-1 rounded-lg transition">
-            Download All (.md)
-          </button>
-        </div>
-        <div id="playlist-results-general" class="space-y-3"></div>
+      <div>
+        <div style="font-weight:700;font-size:17px;background:linear-gradient(90deg,#C4B5FD,#67E8F9);-webkit-background-clip:text;background-clip:text;color:transparent">Nutshell</div>
+        <div style="font-size:10.5px;color:rgba(230,225,245,.5)">hours in, seconds out</div>
       </div>
     </div>
 
-    <!-- ── FINANCIAL TAB ── -->
-    <div id="tab-financial-content" class="hidden">
-      <div class="bg-slate-900 border border-slate-700 rounded-xl p-6 mb-6 no-print">
-        <label class="block text-sm text-slate-400 mb-2">YouTube URL</label>
-        <input id="url-input-financial" type="text"
-          placeholder="https://www.youtube.com/watch?v=..."
-          oninput="onUrlInput('financial')"
-          class="w-full bg-slate-800 border border-slate-600 rounded-lg px-4 py-3 text-sm
-                 focus:outline-none focus:border-sky-500 placeholder-slate-600 mb-4" />
+    <!-- hero -->
+    <div class="panel reveal" id="heroPanel" style="grid-column:span 6;position:relative;overflow:hidden;transition-delay:.12s">
+      <div id="procRim" style="position:absolute;inset:0;border-radius:20px;overflow:hidden;opacity:0;transition:opacity .6s ease;pointer-events:none">
+        <div style="position:absolute;left:50%;top:50%;width:220%;aspect-ratio:1;transform:translate(-50%,-50%);background:conic-gradient(from 0deg,transparent 0 68%,#22D3EE 82%,#A855F7 92%,transparent 100%);animation:nsSpin 2.4s linear infinite"></div>
+        <div style="position:absolute;inset:2px;border-radius:18px;background:rgba(12,7,30,.88)"></div>
+      </div>
 
-        <div class="flex items-center gap-4 flex-wrap">
-          <button onclick="doSummarize('financial', false)"
-            class="bg-sky-600 hover:bg-sky-500 text-white px-5 py-2 rounded-lg text-sm font-medium transition">
-            Full Notes
-          </button>
-          <button onclick="doSummarize('financial', true)"
-            class="bg-slate-700 hover:bg-slate-600 text-white px-5 py-2 rounded-lg text-sm font-medium transition">
-            Brief TL;DR
-          </button>
-          <button id="playlist-btn-financial" onclick="doPlaylist('financial')"
-            class="hidden bg-violet-700 hover:bg-violet-600 text-white px-5 py-2 rounded-lg text-sm font-medium transition">
-            Summarize Playlist
-          </button>
+      <!-- input layer -->
+      <div id="inputLayer" style="position:absolute;inset:0;display:flex;align-items:center;gap:12px;padding:0 18px;transition:all .45s cubic-bezier(.5,0,.6,1)">
+        <div style="flex:1;display:flex;align-items:center;gap:12px;height:54px;border-radius:999px;background:rgba(0,0,0,.35);border:1px solid rgba(255,255,255,.14);padding:0 8px 0 20px">
+          <svg width="17" height="17" viewBox="0 0 18 18"><path d="M7.5 5 13 9l-5.5 4Z" fill="rgba(230,225,245,.5)"></path><rect x="1.5" y="2.5" width="15" height="13" rx="3.5" fill="none" stroke="rgba(230,225,245,.5)" stroke-width="1.4"></rect></svg>
+          <input id="urlInput" placeholder="Paste a YouTube link — it cracks open right here" style="flex:1;background:transparent;border:none;color:#F1EEFB;font-family:'Sora',sans-serif;font-size:13.5px">
+          <div id="crackBtn" class="grad-btn" style="flex:none;padding:9px 16px;border-radius:999px;font-size:12px;box-shadow:0 4px 20px rgba(124,58,237,.4)">Crack it open</div>
         </div>
       </div>
 
-      <div id="skeleton-financial" class="hidden space-y-3 mb-6 no-print">
-        <div class="h-4 bg-slate-800 rounded animate-pulse w-1/3"></div>
-        <div class="h-24 bg-slate-800 rounded animate-pulse"></div>
-        <div class="h-4 bg-slate-800 rounded animate-pulse w-2/3"></div>
-      </div>
-
-      <div id="spinner-financial" class="items-center gap-3 text-slate-400 text-sm mb-6 hidden no-print">
-        <svg class="animate-spin h-5 w-5 text-sky-500" fill="none" viewBox="0 0 24 24">
-          <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
-          <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/>
-        </svg>
-        <span id="spinner-msg-financial">Fetching transcript...</span>
-      </div>
-
-      <div id="error-box-financial" class="hidden bg-red-950 border border-red-800 text-red-300
-                                            rounded-lg px-4 py-3 text-sm mb-6 no-print">
-        <div class="flex items-center justify-between gap-4">
-          <span id="error-msg-financial"></span>
-          <button onclick="retryLast('financial')"
-            class="shrink-0 bg-red-900 hover:bg-red-800 text-red-200 px-3 py-1 rounded-lg text-xs">Retry</button>
+      <!-- video card layer -->
+      <div id="cardLayer" style="position:absolute;inset:0;display:flex;align-items:center;gap:14px;padding:0 18px;opacity:0;transform:scaleX(.55);transition:all .65s cubic-bezier(.2,1.35,.35,1) .1s;pointer-events:none">
+        <div id="thumbWrap" style="flex:none;width:118px;aspect-ratio:16/9;border-radius:10px;background:linear-gradient(135deg,#1B1235,#0D2233);border:1px solid rgba(103,232,249,.3);display:grid;place-items:center;position:relative;overflow:hidden">
+          <img id="thumbImg" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;opacity:0;transition:opacity .3s" />
+          <div id="thumbShimmer" style="position:absolute;inset:0;background:linear-gradient(105deg,transparent 30%,rgba(103,232,249,.14) 50%,transparent 70%);background-size:200% 100%;animation:nsShimmer 2.8s linear infinite"></div>
+          <svg width="16" height="16" viewBox="0 0 22 22" style="position:relative"><path d="M7 4.5v13l10-6.5Z" fill="#67E8F9"></path></svg>
+          <div style="position:absolute;left:0;right:0;bottom:0;height:2.5px;background:rgba(255,255,255,.1)"><div id="progressBar" style="width:0%;height:100%;background:linear-gradient(90deg,#A855F7,#22D3EE);transition:width .6s ease"></div></div>
         </div>
-      </div>
-
-      <div id="result-box-financial" class="hidden">
-        <div id="result-header-financial" class="hidden items-center gap-3 mb-3"></div>
-        <div class="bg-slate-900 border border-slate-700 rounded-xl p-6">
-          <div id="notes-content-financial" class="prose text-sm text-slate-300"></div>
+        <div style="min-width:0;flex:1">
+          <div id="videoTitleLine" style="font-size:13.5px;font-weight:600;color:#F1EEFB;white-space:nowrap;overflow:hidden;text-overflow:ellipsis"></div>
+          <div id="waveBars" style="margin-top:7px;height:26px;display:flex;align-items:center;gap:3px;overflow:hidden"></div>
         </div>
-        <div class="flex items-center justify-between gap-4 mt-2 flex-wrap no-print">
-          <p class="text-xs text-slate-600" id="result-meta-financial"></p>
-          <div class="flex items-center gap-2">
-            <button onclick="copyNotes('financial')"
-              class="text-xs text-slate-400 hover:text-sky-400 border border-slate-700 hover:border-sky-700 px-3 py-1 rounded-lg transition">Copy</button>
-            <button onclick="copyShareLink('financial')"
-              class="text-xs text-slate-400 hover:text-sky-400 border border-slate-700 hover:border-sky-700 px-3 py-1 rounded-lg transition">Share</button>
-            <button onclick="printResult('financial')"
-              class="text-xs text-slate-400 hover:text-sky-400 border border-slate-700 hover:border-sky-700 px-3 py-1 rounded-lg transition">Print / PDF</button>
-            <button onclick="pinResult('financial')" id="pin-btn-financial"
-              class="text-xs text-slate-400 hover:text-amber-400 border border-slate-700 hover:border-amber-700 px-3 py-1 rounded-lg transition">☆ Pin</button>
-            <button onclick="regenerate('financial')"
-              class="text-xs text-slate-400 hover:text-sky-400 border border-slate-700 hover:border-sky-700 px-3 py-1 rounded-lg transition">Regenerate</button>
-          </div>
+        <div style="flex:none;text-align:right">
+          <div id="playTc" style="font-family:'JetBrains Mono',monospace;font-size:15px;font-weight:700;color:#67E8F9">00:00</div>
+          <div id="heroStatus" style="font-size:10px;color:rgba(230,225,245,.45);margin-top:2px">ready</div>
         </div>
-      </div>
-
-      <div id="playlist-box-financial" class="hidden no-print">
-        <div class="flex items-center justify-between gap-4 mb-4">
-          <p id="playlist-status-financial" class="text-sm text-slate-400"></p>
-          <button id="playlist-download-financial" onclick="downloadPlaylist('financial')"
-            class="hidden shrink-0 text-xs text-slate-400 hover:text-sky-400 border border-slate-700 hover:border-sky-700 px-3 py-1 rounded-lg transition">
-            Download All (.md)
-          </button>
-        </div>
-        <div id="playlist-results-financial" class="space-y-3"></div>
+        <div id="resetBtn" title="Start over with a new link" style="flex:none;width:36px;height:36px;border-radius:12px;border:1px solid rgba(255,255,255,.15);display:grid;place-items:center;color:rgba(230,225,245,.7);cursor:pointer;font-size:16px;transition:all .45s cubic-bezier(.2,1.4,.4,1)">↺</div>
       </div>
     </div>
 
-    <!-- ── HISTORY TAB ── -->
-    <div id="tab-history-content" class="hidden">
-      <div class="flex items-center gap-3 mb-4 flex-wrap">
-        <input id="history-search" type="text" placeholder="Search history…"
-          oninput="renderHistory()"
-          class="flex-1 min-w-[160px] bg-slate-800 border border-slate-600 rounded-lg px-4 py-2 text-sm
-                 focus:outline-none focus:border-sky-500 placeholder-slate-600" />
-        <select id="history-mode-filter" onchange="renderHistory()"
-          class="bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-sky-500">
-          <option value="">All types</option>
-          <option value="general">General</option>
-          <option value="stock">Financial</option>
-        </select>
-        <button onclick="clearAllHistory()"
-          class="shrink-0 text-xs text-slate-500 hover:text-red-400 border border-slate-700 hover:border-red-800 px-3 py-2 rounded-lg transition">
-          Clear All
-        </button>
+    <!-- quota rings -->
+    <div class="panel reveal" style="grid-column:span 3;display:flex;align-items:center;justify-content:space-around;padding:0 10px;transition-delay:.19s">
+      <div style="display:flex;align-items:center;gap:10px">
+        <svg width="52" height="52" viewBox="0 0 52 52"><circle cx="26" cy="26" r="21" fill="none" stroke="rgba(255,255,255,.08)" stroke-width="5"></circle><circle id="ring1" cx="26" cy="26" r="21" fill="none" stroke="#22D3EE" stroke-width="5" stroke-linecap="round" stroke-dasharray="132" stroke-dashoffset="132" transform="rotate(-90 26 26)" style="transition:stroke-dashoffset 1.4s cubic-bezier(.2,1,.3,1) .8s"></circle><text id="ring1Text" x="26" y="30" text-anchor="middle" font-size="11" font-weight="700" fill="#E6E1F5">0</text></svg>
+        <div style="font-size:10.5px;color:rgba(230,225,245,.55);line-height:1.4">videos<br>this month</div>
       </div>
-      <div id="history-bulk-bar" class="hidden items-center gap-3 mb-4 text-xs text-slate-400">
-        <label class="flex items-center gap-2 cursor-pointer">
-          <input type="checkbox" id="history-select-all" onchange="toggleSelectAllHistory(this.checked)" />
-          Select all
-        </label>
-        <span id="history-selected-count"></span>
-        <button onclick="deleteSelectedHistory()"
-          class="text-red-400 hover:text-red-300 border border-red-900 hover:border-red-700 px-3 py-1 rounded-lg transition">
-          Delete Selected
-        </button>
+      <div style="display:flex;align-items:center;gap:10px">
+        <svg width="52" height="52" viewBox="0 0 52 52"><circle cx="26" cy="26" r="21" fill="none" stroke="rgba(255,255,255,.08)" stroke-width="5"></circle><circle id="ring2" cx="26" cy="26" r="21" fill="none" stroke="#A855F7" stroke-width="5" stroke-linecap="round" stroke-dasharray="132" stroke-dashoffset="132" transform="rotate(-90 26 26)" style="transition:stroke-dashoffset 1.4s cubic-bezier(.2,1,.3,1) 1s"></circle><text id="ring2Text" x="26" y="30" text-anchor="middle" font-size="11" font-weight="700" fill="#E6E1F5">0%</text></svg>
+        <div style="font-size:10.5px;color:rgba(230,225,245,.55);line-height:1.4">tokens<br>today</div>
       </div>
-      <div id="history-list" class="space-y-3"></div>
     </div>
 
-  </main>
+    <!-- transcript stream -->
+    <div class="panel reveal" style="grid-column:span 5;grid-row:span 2;display:flex;flex-direction:column;overflow:hidden;transition-delay:.26s">
+      <div style="flex:none;display:flex;align-items:center;padding:16px 20px 10px"><span style="font-size:12px;font-weight:700;letter-spacing:.1em;color:rgba(230,225,245,.65)">TRANSCRIPT STREAM</span><span id="tsStatus" style="margin-left:auto;font-size:10.5px;color:#67E8F9">idle</span></div>
 
-  <div id="toast-container" class="no-print"></div>
+      <div id="tsIdle" style="flex:1;display:grid;place-items:center;font-size:12.5px;color:rgba(230,225,245,.3)">paste a link — the transcript streams in here</div>
+
+      <div id="tsProc" style="flex:1;padding:8px 20px 18px;display:flex;flex-direction:column;gap:13px;display:none">
+        <div style="height:15px;width:88%;border-radius:7px;background:linear-gradient(90deg,rgba(255,255,255,.05) 25%,rgba(103,232,249,.22) 50%,rgba(255,255,255,.05) 75%);background-size:200% 100%;animation:nsShimmer 1.5s linear 0s infinite"></div>
+        <div style="height:15px;width:72%;border-radius:7px;background:linear-gradient(90deg,rgba(255,255,255,.05) 25%,rgba(103,232,249,.22) 50%,rgba(255,255,255,.05) 75%);background-size:200% 100%;animation:nsShimmer 1.5s linear .14s infinite"></div>
+        <div style="height:15px;width:95%;border-radius:7px;background:linear-gradient(90deg,rgba(255,255,255,.05) 25%,rgba(103,232,249,.22) 50%,rgba(255,255,255,.05) 75%);background-size:200% 100%;animation:nsShimmer 1.5s linear .28s infinite"></div>
+        <div style="height:15px;width:64%;border-radius:7px;background:linear-gradient(90deg,rgba(255,255,255,.05) 25%,rgba(103,232,249,.22) 50%,rgba(255,255,255,.05) 75%);background-size:200% 100%;animation:nsShimmer 1.5s linear .42s infinite"></div>
+        <div style="height:15px;width:81%;border-radius:7px;background:linear-gradient(90deg,rgba(255,255,255,.05) 25%,rgba(103,232,249,.22) 50%,rgba(255,255,255,.05) 75%);background-size:200% 100%;animation:nsShimmer 1.5s linear .56s infinite"></div>
+        <div style="height:15px;width:58%;border-radius:7px;background:linear-gradient(90deg,rgba(255,255,255,.05) 25%,rgba(103,232,249,.22) 50%,rgba(255,255,255,.05) 75%);background-size:200% 100%;animation:nsShimmer 1.5s linear .7s infinite"></div>
+        <div style="height:15px;width:76%;border-radius:7px;background:linear-gradient(90deg,rgba(255,255,255,.05) 25%,rgba(103,232,249,.22) 50%,rgba(255,255,255,.05) 75%);background-size:200% 100%;animation:nsShimmer 1.5s linear .84s infinite"></div>
+        <div id="procMsg" style="margin-top:auto;font-family:'JetBrains Mono',monospace;font-size:11px;color:#67E8F9;animation:nsBlink 1.1s infinite">▮ fetching transcript…</div>
+      </div>
+
+      <div id="tsLive" style="flex:1;min-height:0;display:none;flex-direction:column">
+        <div id="tsScroll" class="scrollbar-none" style="flex:1;padding:4px 20px 20px;display:flex;flex-direction:column;gap:10px;font-size:13.5px;line-height:1.55;overflow-y:auto"></div>
+        <div style="flex:none;padding:10px 20px 14px;font-size:10.5px;color:rgba(230,225,245,.4);border-top:1px solid rgba(255,255,255,.06)">click any sentence → magnify + AI slice drawer · auto-follow rides a spring</div>
+      </div>
+    </div>
+
+    <!-- summary -->
+    <div class="panel reveal" style="grid-column:span 4;grid-row:span 2;display:flex;flex-direction:column;overflow:hidden;transition-delay:.33s">
+      <div style="flex:none;display:flex;align-items:center;gap:10px;padding:16px 20px 10px">
+        <span style="font-size:12px;font-weight:700;letter-spacing:.1em;color:rgba(230,225,245,.65)">IN A NUTSHELL</span>
+        <span id="sumBadge" style="margin-left:auto;height:22px;padding:0 10px;border-radius:999px;font-size:10px;font-weight:700;display:none;place-items:center;color:#0A0618;background:linear-gradient(90deg,#A855F7,#22D3EE,#A855F7);background-size:200% 100%;animation:nsShimmer 2.2s linear infinite">COMPRESSING…</span>
+        <span id="lensLabel" style="margin-left:auto;font-size:10.5px;color:rgba(230,225,245,.45);display:none">general lens</span>
+      </div>
+
+      <div id="sumIdle" style="flex:1;display:grid;place-items:center;font-size:12.5px;color:rgba(230,225,245,.3)">the compressed take lands here</div>
+
+      <div id="sumProc" style="flex:1;padding:8px 20px;display:flex;flex-direction:column;gap:13px;display:none">
+        <div style="height:13px;width:92%;border-radius:6px;background:linear-gradient(90deg,rgba(255,255,255,.05) 25%,rgba(168,85,247,.2) 50%,rgba(255,255,255,.05) 75%);background-size:200% 100%;animation:nsShimmer 1.5s linear .2s infinite"></div>
+        <div style="height:13px;width:78%;border-radius:6px;background:linear-gradient(90deg,rgba(255,255,255,.05) 25%,rgba(168,85,247,.2) 50%,rgba(255,255,255,.05) 75%);background-size:200% 100%;animation:nsShimmer 1.5s linear .45s infinite"></div>
+        <div style="height:13px;width:85%;border-radius:6px;background:linear-gradient(90deg,rgba(255,255,255,.05) 25%,rgba(168,85,247,.2) 50%,rgba(255,255,255,.05) 75%);background-size:200% 100%;animation:nsShimmer 1.5s linear .7s infinite"></div>
+      </div>
+
+      <div id="sumLive" style="flex:1;min-height:0;padding:4px 20px 16px;display:none;flex-direction:column;gap:10px">
+        <div id="sumPara" style="font-size:13px;line-height:1.65;color:rgba(230,225,245,.75);max-height:320px;overflow:hidden;transition:max-height .5s cubic-bezier(.6,0,.7,1) .4s"></div>
+        <div id="compressBtn" class="grad-btn" style="align-self:flex-start;padding:9px 18px;border-radius:12px;font-size:12px;box-shadow:0 4px 20px rgba(124,58,237,.35)">Nutshell Compress ⇣</div>
+        <div id="sumBullets" style="display:none;flex-direction:column;gap:9px;font-size:13px;line-height:1.5;color:#E6E1F5"></div>
+
+        <div style="margin-top:auto;position:relative;display:flex;gap:8px">
+          <div id="exportMenu" style="position:absolute;bottom:calc(100% + 10px);left:0;width:220px;border-radius:16px;background:rgba(20,12,42,.92);border:1px solid rgba(255,255,255,.12);backdrop-filter:blur(24px);padding:8px;display:flex;flex-direction:column;gap:2px;box-shadow:0 18px 60px rgba(0,0,0,.55);opacity:0;transform:translateY(16px) scale(.9);transform-origin:bottom left;transition:all .45s cubic-bezier(.2,1.5,.35,1);pointer-events:none"></div>
+          <div id="exportBtn" class="grad-btn" style="flex:1;text-align:center;padding:10px 0;border-radius:12px;font-size:12px">Export ▾</div>
+          <div id="copyBtn" class="ghost-btn" style="flex:1;text-align:center;padding:10px 0;border-radius:12px;font-size:12px;font-weight:600">Copy</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- lens toggle -->
+    <div class="panel reveal" style="grid-column:span 3;display:flex;flex-direction:column;justify-content:center;gap:12px;padding:18px 20px;transition-delay:.4s">
+      <span style="font-size:11px;font-weight:700;letter-spacing:.1em;color:rgba(230,225,245,.55)">LENS</span>
+      <div style="position:relative;height:44px;border-radius:999px;background:rgba(0,0,0,.35);border:1px solid rgba(255,255,255,.1);display:flex">
+        <div id="lensKnob" style="position:absolute;left:4px;top:4px;bottom:4px;width:calc(50% - 8px);border-radius:999px;background:linear-gradient(90deg,#7C3AED,#9333EA);box-shadow:0 2px 16px rgba(124,58,237,.5);transform:translateX(0);transition:transform .55s cubic-bezier(.2,1.55,.35,1)"></div>
+        <div id="lensGeneral" style="flex:1;display:grid;place-items:center;position:relative;font-size:12.5px;font-weight:700;color:#fff;cursor:pointer;transition:color .3s">General</div>
+        <div id="lensFinancial" style="flex:1;display:grid;place-items:center;position:relative;font-size:12.5px;font-weight:600;color:rgba(230,225,245,.5);cursor:pointer;transition:color .3s">Financial</div>
+      </div>
+      <span style="font-size:10.5px;color:rgba(230,225,245,.4)">same transcript, different squeeze</span>
+    </div>
+
+    <!-- history -->
+    <div class="panel reveal" style="grid-column:span 3;display:flex;flex-direction:column;gap:9px;padding:16px 18px;overflow:hidden;transition-delay:.47s">
+      <span style="font-size:11px;font-weight:700;letter-spacing:.1em;color:rgba(230,225,245,.55)">RECENT SHELLS</span>
+      <div id="historyList" style="display:flex;flex-direction:column;gap:9px;overflow-y:auto" class="scrollbar-none"></div>
+    </div>
+  </div>
+
+  <div id="toastEl"></div>
+
+  <!-- AI slice drawer -->
+  <div id="drawer" style="position:absolute;z-index:45;top:116px;bottom:20px;right:20px;width:330px;border-radius:20px;background:rgba(20,12,42,.9);border:1px solid rgba(168,85,247,.35);backdrop-filter:blur(26px);box-shadow:-24px 0 80px rgba(0,0,0,.5);padding:22px;display:flex;flex-direction:column;gap:14px;transform:translateX(calc(100% + 40px));transition:transform .6s cubic-bezier(.18,1.3,.3,1)">
+    <div style="display:flex;align-items:center;gap:10px">
+      <div style="width:26px;height:26px;border-radius:8px;background:linear-gradient(135deg,#A855F7,#22D3EE);display:grid;place-items:center;font-size:12px;animation:nsHiGlow 2.4s ease-in-out infinite;color:#fff;font-weight:800">✦</div>
+      <span style="font-size:12px;font-weight:700;letter-spacing:.1em;color:rgba(230,225,245,.75)">THIS SLICE</span>
+      <span id="drawerTc" style="margin-left:auto;font-family:'JetBrains Mono',monospace;font-size:11px;color:#67E8F9"></span>
+      <div id="drawerClose" style="width:24px;height:24px;border-radius:8px;display:grid;place-items:center;color:rgba(230,225,245,.6);cursor:pointer;font-size:13px;transition:all .2s">✕</div>
+    </div>
+    <div id="drawerQuote" style="font-size:13px;line-height:1.6;color:#F1EEFB;padding:12px 14px;border-radius:14px;background:linear-gradient(120deg,rgba(168,85,247,.18),rgba(34,211,238,.12));border:1px solid rgba(103,232,249,.25)"></div>
+    <div style="margin-top:auto;display:flex;gap:8px">
+      <div id="saveNoteBtn" class="grad-btn" style="flex:1;text-align:center;padding:9px 0;border-radius:11px;font-size:11.5px">Save note</div>
+      <div id="drawerDismiss" class="ghost-btn" style="flex:1;text-align:center;padding:9px 0;border-radius:11px;font-size:11.5px;font-weight:600">Dismiss</div>
+    </div>
+  </div>
+
+  <!-- intro overlay -->
+  <div id="intro" style="position:absolute;inset:0;z-index:60;background:#0A0618;display:grid;place-items:center;opacity:1;transition:opacity .55s ease">
+    <div style="display:flex;flex-direction:column;align-items:center;gap:26px">
+      <div style="position:relative;width:150px;height:150px">
+        <div id="orbit1" style="position:absolute;left:50%;top:50%;width:4px;height:4px;margin:-2px 0 0 -2px;animation:nsOrbit 2.6s linear infinite;opacity:1;transition:opacity .4s"><span style="display:block;width:4px;height:4px;border-radius:50%;background:#67E8F9;box-shadow:0 0 8px #67E8F9"></span></div>
+        <div id="orbit2" style="position:absolute;left:50%;top:50%;width:3px;height:3px;margin:-1px 0 0 -1px;animation:nsOrbit2 3.8s linear .6s infinite;opacity:1;transition:opacity .4s"><span style="display:block;width:3px;height:3px;border-radius:50%;background:#A855F7;box-shadow:0 0 8px #A855F7"></span></div>
+        <div id="burstRing" style="position:absolute;inset:-24px;border-radius:50%;border:1.5px solid rgba(103,232,249,.6);opacity:.9;transform:scale(.6);transition:all .8s cubic-bezier(.2,.9,.3,1)"></div>
+        <div id="kernel" style="position:absolute;inset:26px;border-radius:50%;background:radial-gradient(circle,rgba(168,85,247,.7),rgba(34,211,238,.25) 60%,transparent 75%);filter:blur(10px);transform:scale(1);transition:transform .7s cubic-bezier(.2,1.3,.4,1)"></div>
+        <div id="halfL" style="position:absolute;left:0;top:0;width:75px;height:150px;overflow:hidden;transform:translateX(0) rotate(0deg);transition:transform .6s cubic-bezier(.3,1.5,.4,1)">
+          <svg width="150" height="150" viewBox="0 0 20 20"><path d="M10 1.5c3.6 0 6.5 2.6 6.5 6.2 0 4.4-3.4 6.6-4.6 9.6-.3.8-.9 1.2-1.9 1.2s-1.6-.4-1.9-1.2C6.9 14.3 3.5 12.1 3.5 7.7 3.5 4.1 6.4 1.5 10 1.5Z" fill="none" stroke="url(#nsg1)" stroke-width="1.2"></path><defs><linearGradient id="nsg1" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#C4B5FD"></stop><stop offset="1" stop-color="#67E8F9"></stop></linearGradient></defs></svg>
+        </div>
+        <div id="halfR" style="position:absolute;right:0;top:0;width:75px;height:150px;overflow:hidden;transform:translateX(0) rotate(0deg);transition:transform .6s cubic-bezier(.3,1.5,.4,1)">
+          <svg width="150" height="150" viewBox="0 0 20 20" style="margin-left:-75px"><path d="M10 1.5c3.6 0 6.5 2.6 6.5 6.2 0 4.4-3.4 6.6-4.6 9.6-.3.8-.9 1.2-1.9 1.2s-1.6-.4-1.9-1.2C6.9 14.3 3.5 12.1 3.5 7.7 3.5 4.1 6.4 1.5 10 1.5Z" fill="none" stroke="url(#nsg2)" stroke-width="1.2"></path><defs><linearGradient id="nsg2" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#C4B5FD"></stop><stop offset="1" stop-color="#67E8F9"></stop></linearGradient></defs></svg>
+        </div>
+      </div>
+      <div id="introWord" style="text-align:center;opacity:0;transform:translateY(14px);transition:all .7s cubic-bezier(.2,1.2,.4,1)">
+        <div style="font-weight:800;font-size:30px;letter-spacing:-.01em;background:linear-gradient(90deg,#C4B5FD,#67E8F9);-webkit-background-clip:text;background-clip:text;color:transparent">Nutshell</div>
+        <div style="font-size:12px;color:rgba(230,225,245,.5);margin-top:5px">cracking the shell…</div>
+      </div>
+    </div>
+  </div>
+</div>
 
 <script>
 const API = '';
-const MODE_FOR_TAB = { general: 'general', financial: 'stock' };
-let _lastRequest = {};  // tab -> {url, brief}
-let _lastResult  = {};  // tab -> last response data
-let _groqWarned  = false;  // avoid re-toasting the Groq quota warning every summarize
+
+// ── State ─────────────────────────────────────────────────────────────
+const state = {
+  phase: 'ready',       // ready | processing | live
+  mode: 'general',       // general | stock
+  url: '', videoId: '', title: '', thumbnailUrl: '', notes: '', lines: [],
+  activeIdx: 0, playing: false, highlightIdx: null,
+  sumStage: 'para', exportOpen: false, currentId: null,
+};
+let _playTimer = null, _procMsgTimer = null, _lastRequest = null, _historyRows = [];
+
+// ── Twinkle field ─────────────────────────────────────────────────────
+(function initTwinkles() {
+  const wrap = document.getElementById('twinkles');
+  for (let i = 0; i < 16; i++) {
+    const s = document.createElement('span');
+    const size = 2 + (i % 2);
+    s.style.cssText = `position:absolute;left:${((i*37)%96)+2}%;top:${((i*53)%92)+3}%;width:${size}px;height:${size}px;border-radius:50%;background:${i%3===0?'rgba(168,85,247,.9)':'rgba(103,232,249,.85)'};animation:nsTwinkle ${(2.4+(i%5)*0.7).toFixed(1)}s ease-in-out ${((i*0.43)%3).toFixed(2)}s infinite`;
+    wrap.appendChild(s);
+  }
+})();
+
+// ── Intro sequence ────────────────────────────────────────────────────
+function runIntro() {
+  setTimeout(() => {
+    document.getElementById('orbit1').style.opacity = 0;
+    document.getElementById('orbit2').style.opacity = 0;
+    document.getElementById('burstRing').style.opacity = 0;
+    document.getElementById('burstRing').style.transform = 'scale(2.1)';
+    document.getElementById('kernel').style.transform = 'scale(2.4)';
+    document.getElementById('halfL').style.transform = 'translateX(-44px) rotate(-13deg)';
+    document.getElementById('halfR').style.transform = 'translateX(44px) rotate(13deg)';
+    const w = document.getElementById('introWord');
+    w.style.opacity = 1; w.style.transform = 'translateY(0)';
+  }, 700);
+  setTimeout(() => {
+    document.querySelectorAll('.reveal').forEach(el => el.classList.add('in'));
+    refreshQuota();
+    loadHistory();
+  }, 1150);
+  setTimeout(() => { document.getElementById('intro').style.opacity = 0; }, 1550);
+  setTimeout(() => { document.getElementById('intro').style.display = 'none'; }, 2150);
+}
+
+// ── Toast ─────────────────────────────────────────────────────────────
+let _toastTo = null, _groqWarned = false;
+function showToast(msg) {
+  clearTimeout(_toastTo);
+  const el = document.getElementById('toastEl');
+  el.textContent = msg;
+  el.classList.add('show');
+  _toastTo = setTimeout(() => el.classList.remove('show'), 1800);
+}
 
 // ── Quota ─────────────────────────────────────────────────────────────
 async function refreshQuota() {
   try {
     const q = await fetch(`${API}/api/quota`).then(r => r.json());
-    const wrap = document.getElementById('quota-line');
+    const pct1 = Math.min(1, q.used / q.limit);
+    const pct2 = q.groq_limit ? (q.groq_limit - q.groq_remaining) / q.groq_limit : 0;
+    document.getElementById('ring1').style.strokeDashoffset = 132 * (1 - pct1);
+    document.getElementById('ring1Text').textContent = q.used;
+    document.getElementById('ring2').style.strokeDashoffset = 132 * (1 - pct2);
+    document.getElementById('ring2Text').textContent = Math.round(pct2 * 100) + '%';
 
-    const el = document.getElementById('quota-text');
-    el.className = q.remaining <= 10 ? 'text-amber-500' : 'text-slate-600';
-    el.textContent = `Transcript quota: ${q.remaining} of ${q.limit} remaining this month`;
-
-    const groqEl = document.getElementById('groq-quota-text');
-    const groqPct = q.groq_limit ? q.groq_remaining / q.groq_limit : 1;
-    groqEl.className = groqPct <= 0.15 ? 'text-amber-500' : 'text-slate-600';
-    groqEl.textContent =
-      `AI quota: ${q.groq_remaining?.toLocaleString()} of ${q.groq_limit?.toLocaleString()} tokens remaining today`;
-
-    wrap.classList.remove('hidden');
-    maybeWarnGroqQuota(q);
-    return q;
-  } catch(_) { return null; }
-}
-
-function maybeWarnGroqQuota(q) {
-  if (!q.groq_limit || _groqWarned) return;
-  const pct = q.groq_remaining / q.groq_limit;
-  if (pct <= 0.15) {
-    _groqWarned = true;
-    showToast(
-      `Heads up: only ${q.groq_remaining.toLocaleString()} of ${q.groq_limit.toLocaleString()} daily AI tokens left. Summaries may start failing until it resets.`,
-      'error'
-    );
-  }
-}
-
-// ── Bootstrap ─────────────────────────────────────────────────────────
-async function init() {
-  await refreshQuota();
-
-  // Deep-link to a summary
-  const params = new URLSearchParams(location.search);
-  if (params.has('summary')) {
-    const data = await fetch(`${API}/api/summaries/${params.get('summary')}`).then(r => r.json()).catch(() => null);
-    if (data) {
-      const tab = tabForMode(data.mode, data.notes);
-      document.getElementById(`url-input-${tab}`).value = data.url;
-      showResult(tab, data);
-      showTab(tab);
+    if (!_groqWarned && q.groq_limit && (q.groq_remaining / q.groq_limit) <= 0.15) {
+      _groqWarned = true;
+      showToast(`Heads up — only ${q.groq_remaining.toLocaleString()} of ${q.groq_limit.toLocaleString()} daily AI tokens left`);
     }
-  }
-
-  document.addEventListener('keydown', e => {
-    if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
-      const active = ['general','financial'].find(t =>
-        !document.getElementById(`tab-${t}-content`).classList.contains('hidden'));
-      if (active) doSummarize(active, false);
-    }
-    if (e.key === 'Escape') {
-      ['general','financial'].forEach(hideError);
-    }
-  });
-}
-
-function tabForMode(mode, notes) {
-  if (mode === 'stock') return 'financial';
-  if (mode === 'general') return 'general';
-  // Fallback for rows saved before the `mode` column existed.
-  return /## Thesis/.test(notes || '') ? 'financial' : 'general';
-}
-
-// ── Tab switching ─────────────────────────────────────────────────────
-function showTab(name) {
-  ['general','financial','history'].forEach(t => {
-    const content = document.getElementById(`tab-${t}-content`);
-    if (content) content.classList.add('hidden');
-    const btn = document.getElementById(`tab-${t}`);
-    if (btn) {
-      btn.classList.remove('text-sky-400','border-b','border-sky-400');
-      btn.classList.add('text-slate-500');
-    }
-  });
-  document.getElementById(`tab-${name}-content`).classList.remove('hidden');
-  const active = document.getElementById(`tab-${name}`);
-  if (active) {
-    active.classList.remove('text-slate-500');
-    active.classList.add('text-sky-400','border-b','border-sky-400');
-  }
-  if (name === 'history') loadHistory();
-}
-
-// ── Summarize ─────────────────────────────────────────────────────────
-async function doSummarize(tab, brief) {
-  const url = document.getElementById(`url-input-${tab}`).value.trim();
-  if (!url) return;
-  const mode = MODE_FOR_TAB[tab];
-  _lastRequest[tab] = {url, brief};
-
-  setSpinner(tab, true, brief ? 'Generating brief summary...' : 'Fetching transcript...');
-  hideError(tab);
-  document.getElementById(`result-box-${tab}`).classList.add('hidden');
-
-  try {
-    const res  = await fetch(`${API}/api/summarize`, {
-      method: 'POST',
-      headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({url, brief, mode}),
-    });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.detail || 'Unknown error');
-    showResult(tab, data);
-    if (data.groq_limit) {
-      maybeWarnGroqQuota({groq_used: data.groq_used, groq_limit: data.groq_limit,
-                           groq_remaining: data.groq_limit - data.groq_used});
-    }
-  } catch(e) {
-    showError(tab, e.message);
-  } finally {
-    setSpinner(tab, false);
-    refreshQuota();  // a rate-limit error resyncs our tracker server-side — always reflect it
-  }
-}
-
-function retryLast(tab) {
-  const req = _lastRequest[tab];
-  if (!req) return;
-  document.getElementById(`url-input-${tab}`).value = req.url;
-  doSummarize(tab, req.brief);
-}
-
-function regenerate(tab) {
-  const req = _lastRequest[tab];
-  if (!req) return;
-  document.getElementById(`url-input-${tab}`).value = req.url;
-  doSummarize(tab, !req.brief);
-}
-
-async function copyNotes(tab) {
-  const data = _lastResult[tab];
-  if (!data) return;
-  try {
-    await navigator.clipboard.writeText(data.notes || '');
-    showToast('Copied notes to clipboard', 'success');
-  } catch(e) { showToast('Could not copy: ' + e.message, 'error'); }
-}
-
-async function copyShareLink(tab) {
-  const data = _lastResult[tab];
-  if (!data) return;
-  const link = `${location.origin}/?summary=${data.id}`;
-  try {
-    await navigator.clipboard.writeText(link);
-    showToast('Share link copied', 'success');
-  } catch(e) { showToast('Could not copy: ' + e.message, 'error'); }
-}
-
-function printResult(tab) {
-  const data = _lastResult[tab];
-  if (!data) return;
-  document.title = data.title || 'Nutshell summary';
-  window.print();
-}
-
-async function pinResult(tab) {
-  const data = _lastResult[tab];
-  if (!data) return;
-  const nowPinned = !data.pinned;
-  try {
-    await fetch(`${API}/api/summaries/${data.id}/pin`, {
-      method: 'PATCH',
-      headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({pinned: nowPinned}),
-    });
-    data.pinned = nowPinned;
-    const btn = document.getElementById(`pin-btn-${tab}`);
-    btn.textContent = nowPinned ? '★ Pinned' : '☆ Pin';
-    showToast(nowPinned ? 'Pinned to top of history' : 'Unpinned', 'success');
-  } catch(e) { showToast('Could not update pin: ' + e.message, 'error'); }
-}
-
-// ── URL input detection ───────────────────────────────────────────────
-function onUrlInput(tab) {
-  const url = document.getElementById(`url-input-${tab}`).value.trim();
-  const isPlaylist = /[?&]list=/.test(url) && !/watch/.test(url);
-  document.getElementById(`playlist-btn-${tab}`).classList.toggle('hidden', !isPlaylist);
-}
-
-// ── Playlist ──────────────────────────────────────────────────────────
-let _playlistVideos = {};  // tab -> array of completed video summary data
-
-async function doPlaylist(tab) {
-  const url = document.getElementById(`url-input-${tab}`).value.trim();
-  if (!url) return;
-  const mode = MODE_FOR_TAB[tab];
-
-  document.getElementById(`result-box-${tab}`).classList.add('hidden');
-  document.getElementById(`playlist-box-${tab}`).classList.remove('hidden');
-  document.getElementById(`playlist-results-${tab}`).innerHTML = '';
-  document.getElementById(`playlist-status-${tab}`).textContent = 'Fetching playlist…';
-  document.getElementById(`playlist-download-${tab}`).classList.add('hidden');
-  document.getElementById(`error-box-${tab}`).classList.add('hidden');
-  _playlistVideos[tab] = [];
-
-  try {
-    const res = await fetch(`${API}/api/summarize/playlist`, {
-      method: 'POST',
-      headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({url, mode}),
-    });
-
-    if (!res.ok) {
-      const data = await res.json();
-      showError(tab, data.detail || 'Playlist error');
-      document.getElementById(`playlist-box-${tab}`).classList.add('hidden');
-      return;
-    }
-
-    const reader  = res.body.getReader();
-    const decoder = new TextDecoder();
-    let buffer = '';
-
-    while (true) {
-      const {done, value} = await reader.read();
-      if (done) break;
-      buffer += decoder.decode(value, {stream: true});
-      const chunks = buffer.split('\n\n');
-      buffer = chunks.pop();
-      for (const chunk of chunks) {
-        if (!chunk.startsWith('data: ')) continue;
-        const msg = JSON.parse(chunk.slice(6));
-        if (msg.type === 'start') {
-          document.getElementById(`playlist-status-${tab}`).textContent =
-            `Processing 0 / ${msg.total} videos…`;
-        } else if (msg.type === 'video') {
-          document.getElementById(`playlist-status-${tab}`).textContent =
-            `Processing ${msg.index + 1} / ${msg.total} videos…`;
-          _appendPlaylistVideo(tab, msg);
-        } else if (msg.type === 'error') {
-          _appendPlaylistError(tab, msg);
-        } else if (msg.type === 'done') {
-          document.getElementById(`playlist-status-${tab}`).textContent = 'Done.';
-          if (_playlistVideos[tab]?.length) {
-            document.getElementById(`playlist-download-${tab}`).classList.remove('hidden');
-          }
-        }
-      }
-    }
-  } catch(e) {
-    showError(tab, e.message);
-    document.getElementById(`playlist-box-${tab}`).classList.add('hidden');
-  }
-}
-
-function _appendPlaylistVideo(tab, data) {
-  (_playlistVideos[tab] ||= []).push(data);
-  const thesis = extractThesis(data.notes);
-  const el = document.createElement('div');
-  el.className = 'bg-slate-900 border border-slate-700 rounded-xl p-4 cursor-pointer hover:border-sky-700 transition';
-  el.onclick = () => { showResult(tab, data); showTab(tab); };
-  el.innerHTML = `
-    <div class="flex items-center gap-3 mb-2">
-      ${_thumbHtml(data.thumbnail_url)}
-      <p class="text-sm text-slate-200 font-medium truncate">${escapeHtml(data.title) || 'Video ' + (data.index + 1)}</p>
-    </div>
-    <p class="text-xs text-slate-500 mb-1">
-      Video ${data.index + 1} of ${data.total} · ${data.word_count?.toLocaleString()} words
-    </p>
-    <p class="text-sm text-slate-200">${thesis}</p>
-    <p class="text-xs text-slate-600 mt-1 truncate">${data.url}</p>`;
-  document.getElementById(`playlist-results-${tab}`).appendChild(el);
-}
-
-function downloadPlaylist(tab) {
-  const videos = _playlistVideos[tab] || [];
-  if (!videos.length) return;
-  const md = videos.map(v =>
-    `# ${v.title || v.video_id}\n\n${v.url}\n\n${v.notes}\n`
-  ).join('\n---\n\n');
-  const blob = new Blob([md], {type: 'text/markdown'});
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(blob);
-  a.download = `nutshell-playlist-${tab}-${Date.now()}.md`;
-  a.click();
-  URL.revokeObjectURL(a.href);
-}
-
-function _appendPlaylistError(tab, data) {
-  const el = document.createElement('div');
-  el.className = 'bg-red-950 border border-red-800 rounded-xl p-4';
-  el.innerHTML = `
-    <p class="text-xs text-red-400">Video ${data.index + 1}: ${data.error}</p>
-    <p class="text-xs text-slate-600">${data.url}</p>`;
-  document.getElementById(`playlist-results-${tab}`).appendChild(el);
-}
-
-function _thumbHtml(url) {
-  if (!url) return '';
-  return `<img src="${url}" class="w-20 h-11 object-cover rounded-md border border-slate-700 shrink-0"
-               onerror="this.remove()" />`;
-}
-
-function escapeHtml(s) {
-  const div = document.createElement('div');
-  div.textContent = s || '';
-  return div.innerHTML;
-}
-
-function showResult(tab, data) {
-  _lastResult[tab] = data;
-  if (!_lastRequest[tab]) _lastRequest[tab] = {url: data.url, brief: data.brief};
-  const header = document.getElementById(`result-header-${tab}`);
-  if (data.thumbnail_url || data.title) {
-    header.innerHTML = `
-      ${_thumbHtml(data.thumbnail_url)}
-      <p class="text-sm text-slate-200 font-medium">${escapeHtml(data.title)}</p>`;
-    header.classList.remove('hidden');
-    header.classList.add('flex');
-  } else {
-    header.classList.add('hidden');
-    header.classList.remove('flex');
-  }
-  document.getElementById(`notes-content-${tab}`).innerHTML = marked.parse(data.notes || '');
-  document.getElementById(`result-meta-${tab}`).textContent =
-    `${data.word_count?.toLocaleString()} words · ${data.cached ? 'cached transcript' : 'fresh transcript'} · ID: ${data.id}`;
-  const pinBtn = document.getElementById(`pin-btn-${tab}`);
-  if (pinBtn) pinBtn.textContent = data.pinned ? '★ Pinned' : '☆ Pin';
-  document.getElementById(`result-box-${tab}`).classList.remove('hidden');
+  } catch (_) {}
 }
 
 // ── History ───────────────────────────────────────────────────────────
-let _historyNotes    = {};
-let _historyRows     = [];
-let _selectedHistory = new Set();
-
+const HISTORY_GRADS = [
+  'linear-gradient(135deg,#312E81,#0E7490)', 'linear-gradient(135deg,#4C1D95,#155E75)',
+  'linear-gradient(135deg,#1E1B4B,#164E63)', 'linear-gradient(135deg,#581C87,#0E7490)',
+  'linear-gradient(135deg,#3730A3,#0891B2)',
+];
 async function loadHistory() {
-  const list = document.getElementById('history-list');
-  list.innerHTML = '<p class="text-slate-600 text-sm">Loading...</p>';
   try {
-    _historyRows = await fetch(`${API}/api/history`).then(r => r.json());
-    _selectedHistory.clear();
+    _historyRows = await fetch(`${API}/api/history?limit=6`).then(r => r.json());
     renderHistory();
-  } catch(e) {
-    list.innerHTML = `<p class="text-red-400 text-sm">${e.message}</p>`;
-  }
+  } catch (_) {}
 }
-
 function renderHistory() {
-  const list       = document.getElementById('history-list');
-  const query      = (document.getElementById('history-search')?.value || '').trim().toLowerCase();
-  const modeFilter = document.getElementById('history-mode-filter')?.value || '';
-
-  let rows = _historyRows;
-  if (modeFilter) rows = rows.filter(r => (r.mode || 'general') === modeFilter);
-  if (query) {
-    rows = rows.filter(r =>
-      (r.title || '').toLowerCase().includes(query) ||
-      (r.notes || '').toLowerCase().includes(query) ||
-      (r.url   || '').toLowerCase().includes(query));
-  }
-
-  updateBulkBar();
-
-  if (!_historyRows.length) {
-    list.innerHTML = '<p class="text-slate-600 text-sm">No summaries yet.</p>';
-    return;
-  }
-  if (!rows.length) {
-    list.innerHTML = '<p class="text-slate-600 text-sm">No matches.</p>';
-    return;
-  }
-
-  _historyNotes = {};
-  list.innerHTML = rows.map(r => {
-    _historyNotes[r.id] = r.notes || '';
-    const thesis   = extractThesis(r.notes);
-    const date     = r.created_at.slice(0,16).replace('T',' ');
-    const typeName = (r.mode || 'general') === 'stock' ? 'Financial' : 'General';
-    const checked  = _selectedHistory.has(r.id) ? 'checked' : '';
-    const pinStar  = r.pinned ? '★' : '☆';
-    return `
-      <div class="bg-slate-900 border rounded-xl p-4 ${r.pinned ? 'border-amber-700' : 'border-slate-700'}" id="history-item-${r.id}">
-        <div class="flex items-start justify-between gap-4">
-          <div class="flex items-start gap-3 min-w-0">
-            <input type="checkbox" class="mt-1 shrink-0" ${checked}
-              onchange="toggleSelectHistory('${r.id}', this.checked)" />
-            <div class="cursor-pointer flex items-start gap-3 min-w-0" onclick="toggleHistoryItem('${r.id}')">
-              ${_thumbHtml(r.thumbnail_url)}
-              <div class="min-w-0">
-                ${r.title ? `<p class="text-sm text-slate-200 font-medium truncate">${escapeHtml(r.title)}</p>` : ''}
-                <p class="text-xs text-slate-500 mb-1">${date} · ${typeName} · ${r.brief ? 'brief' : 'full'} · ${r.word_count?.toLocaleString()} words</p>
-                <p class="text-sm text-slate-200">${thesis}</p>
-                <p class="text-xs text-slate-600 mt-1 truncate max-w-lg">${r.url}</p>
-              </div>
-            </div>
-          </div>
-          <div class="flex items-center gap-3 shrink-0">
-            <button onclick="event.stopPropagation(); toggleHistoryPin('${r.id}')"
-              title="Pin" class="text-amber-400 hover:text-amber-300 text-sm">${pinStar}</button>
-            <span class="text-xs text-slate-600">${r.id}</span>
-            <button onclick="event.stopPropagation(); deleteHistoryItem('${r.id}')"
-              title="Delete"
-              class="text-slate-600 hover:text-red-400 hover:bg-red-950/40 text-xs px-2 py-1 rounded transition">
-              &times;
-            </button>
-          </div>
-        </div>
-        <div id="history-notes-${r.id}" class="hidden prose text-sm text-slate-300 mt-4 pt-4 border-t border-slate-800"></div>
-      </div>`;
-  }).join('');
-}
-
-function updateBulkBar() {
-  const bar = document.getElementById('history-bulk-bar');
-  const count = _selectedHistory.size;
-  document.getElementById('history-selected-count').textContent =
-    count ? `${count} selected` : '';
-  bar.classList.toggle('hidden', count === 0);
-  bar.classList.toggle('flex', count > 0);
-}
-
-function toggleSelectHistory(id, checked) {
-  if (checked) _selectedHistory.add(id); else _selectedHistory.delete(id);
-  updateBulkBar();
-}
-
-function toggleSelectAllHistory(checked) {
-  document.querySelectorAll('#history-list input[type=checkbox]').forEach(cb => {
-    cb.checked = checked;
-    const id = cb.closest('[id^="history-item-"]').id.replace('history-item-', '');
-    if (checked) _selectedHistory.add(id); else _selectedHistory.delete(id);
-  });
-  updateBulkBar();
-}
-
-async function deleteSelectedHistory() {
-  const ids = [..._selectedHistory];
-  if (!ids.length) return;
-  if (!confirm(`Delete ${ids.length} selected entries?`)) return;
-  try {
-    await Promise.all(ids.map(id => fetch(`${API}/api/summaries/${id}`, {method: 'DELETE'})));
-    _historyRows = _historyRows.filter(r => !_selectedHistory.has(r.id));
-    _selectedHistory.clear();
-    renderHistory();
-    showToast(`Deleted ${ids.length} entries`, 'success');
-  } catch(e) {
-    showToast(e.message, 'error');
-  }
-}
-
-async function toggleHistoryPin(id) {
-  const row = _historyRows.find(r => r.id === id);
-  if (!row) return;
-  const nowPinned = !row.pinned;
-  try {
-    await fetch(`${API}/api/summaries/${id}/pin`, {
-      method: 'PATCH',
-      headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({pinned: nowPinned}),
-    });
-    row.pinned = nowPinned;
-    _historyRows.sort((a, b) => (b.pinned - a.pinned) || (b.created_at > a.created_at ? 1 : -1));
-    renderHistory();
-  } catch(e) {
-    showToast('Could not update pin: ' + e.message, 'error');
-  }
-}
-
-async function clearAllHistory() {
-  if (!_historyRows.length) return;
-  if (!confirm(`Delete all ${_historyRows.length} history entries? This can't be undone.`)) return;
-  try {
-    await fetch(`${API}/api/history`, {method: 'DELETE'});
-    _historyRows = [];
-    _historyNotes = {};
-    _selectedHistory.clear();
-    renderHistory();
-  } catch(e) {
-    showToast(e.message, 'error');
-  }
-}
-
-function toggleHistoryItem(id) {
-  const panel = document.getElementById(`history-notes-${id}`);
-  if (!panel) return;
-  if (panel.classList.contains('hidden')) {
-    panel.innerHTML = marked.parse(_historyNotes[id] || '');
-    panel.classList.remove('hidden');
-  } else {
-    panel.classList.add('hidden');
-  }
-}
-
-async function deleteHistoryItem(id) {
-  try {
-    await fetch(`${API}/api/summaries/${id}`, {method: 'DELETE'});
-    delete _historyNotes[id];
-    _historyRows = _historyRows.filter(r => r.id !== id);
-    _selectedHistory.delete(id);
-    const el = document.getElementById(`history-item-${id}`);
-    if (el) el.remove();
-    const list = document.getElementById('history-list');
-    if (!list.children.length) {
-      list.innerHTML = '<p class="text-slate-600 text-sm">No summaries yet.</p>';
+  const wrap = document.getElementById('historyList');
+  wrap.innerHTML = '';
+  _historyRows.forEach((h, i) => {
+    const el = document.createElement('div');
+    el.style.cssText = 'display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:12px;background:rgba(255,255,255,.05);cursor:pointer;transition:background .2s,transform .35s cubic-bezier(.2,1.4,.4,1)';
+    el.onmouseenter = () => { el.style.background = 'rgba(255,255,255,.1)'; el.style.transform = 'translateX(5px)'; };
+    el.onmouseleave = () => { el.style.background = 'rgba(255,255,255,.05)'; el.style.transform = 'translateX(0)'; };
+    el.innerHTML = `
+      <div style="flex:none;width:40px;height:24px;border-radius:6px;background:${HISTORY_GRADS[i % HISTORY_GRADS.length]};background-size:cover;background-position:center"></div>
+      <span style="font-size:11.5px;color:rgba(230,225,245,.75);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:1">${escapeHtml(h.title || h.url)}</span>
+      <span style="margin-left:auto;flex:none;color:#67E8F9;font-size:12px;opacity:.6">↻</span>`;
+    if (h.thumbnail_url) {
+      el.firstElementChild.style.backgroundImage = `url(${h.thumbnail_url})`;
     }
-  } catch(e) {
-    showToast(e.message, 'error');
+    el.onclick = () => loadFromHistory(h.id);
+    wrap.appendChild(el);
+  });
+}
+
+async function loadFromHistory(id) {
+  showToast('Re-cracking that shell…');
+  runProcessingAnim();
+  try {
+    const data = await fetch(`${API}/api/summaries/${id}`).then(r => r.json());
+    state.mode = (data.mode || 'general') === 'stock' ? 'stock' : 'general';
+    applyLensUI();
+    setTimeout(() => goLive(data), 700);
+  } catch (e) {
+    showToast('Could not load that shell');
+    resetHero();
   }
 }
 
 // ── Utilities ─────────────────────────────────────────────────────────
-function extractThesis(notes) {
-  const m = notes?.match(/## (?:Thesis|Overview|Summary)\s*\n+(.+)/);
-  const t = m ? m[1].trim() : '—';
-  return t.length > 100 ? t.slice(0,100) + '…' : t;
+function escapeHtml(s) {
+  const d = document.createElement('div');
+  d.textContent = s || '';
+  return d.innerHTML;
+}
+function fmtTc(sec) {
+  sec = Math.max(0, Math.round(sec || 0));
+  const m = Math.floor(sec / 60), s = sec % 60;
+  return `${m}:${String(s).padStart(2, '0')}`;
+}
+function parseNotes(md) {
+  const lines = (md || '').split('\n');
+  const paraLines = [];
+  const bullets = [];
+  let sawBullet = false;
+  // Markdown bullets can be "-", "•", or "*" (but not "**bold**" at line start).
+  const isBullet = (line) => /^[-•]\s+/.test(line) || /^\*(?!\*)\s+/.test(line);
+  for (const raw of lines) {
+    const line = raw.trim();
+    if (!line || line.startsWith('#')) continue;
+    if (isBullet(line)) {
+      sawBullet = true;
+      let text = line.replace(/^[-•*]\s*/, '').replace(/\*\*/g, '');
+      bullets.push(text);
+    } else if (!sawBullet) {
+      paraLines.push(line);
+    }
+  }
+  return { paragraph: paraLines.join(' '), bullets };
 }
 
-function setSpinner(tab, on, msg = '') {
-  const el = document.getElementById(`spinner-${tab}`);
-  el.classList.toggle('hidden', !on);
-  el.classList.toggle('active', on);
-  if (msg) document.getElementById(`spinner-msg-${tab}`).textContent = msg;
-  document.getElementById(`skeleton-${tab}`).classList.toggle('hidden', !on);
+// ── Hero: URL submit / morph ─────────────────────────────────────────
+function startSummarize(url, mode) {
+  if (state.phase !== 'ready') return;
+  url = url.trim();
+  if (!url) return;
+  state.url = url;
+  _lastRequest = { url, mode: mode || state.mode, brief: false };
+  morphToCard();
+  setTimeout(() => runProcessingAnim(), 550);
+  doFetch(_lastRequest);
 }
 
-function showError(tab, msg) {
-  document.getElementById(`error-msg-${tab}`).textContent = msg;
-  document.getElementById(`error-box-${tab}`).classList.remove('hidden');
+function morphToCard() {
+  document.getElementById('inputLayer').style.opacity = 0;
+  document.getElementById('inputLayer').style.transform = 'scale(.72)';
+  document.getElementById('inputLayer').style.pointerEvents = 'none';
+  document.getElementById('cardLayer').style.opacity = 1;
+  document.getElementById('cardLayer').style.transform = 'scaleX(1)';
+  document.getElementById('cardLayer').style.pointerEvents = 'auto';
+  document.getElementById('videoTitleLine').textContent = 'Loading…';
+  document.getElementById('thumbImg').style.opacity = 0;
+  document.getElementById('heroStatus').textContent = 'parsing audio…';
+  buildWave(32);
 }
 
-function hideError(tab) {
-  document.getElementById(`error-box-${tab}`).classList.add('hidden');
+function buildWave(n) {
+  const wrap = document.getElementById('waveBars');
+  wrap.innerHTML = '';
+  for (let i = 0; i < n; i++) {
+    const h = Math.round(8 + Math.abs(Math.sin(i * 1.35 + 1)) * 16);
+    const dur = (1.1 + ((i * 7) % 10) / 12).toFixed(2);
+    const delay = (((i * 13) % 20) / 20).toFixed(2);
+    const bar = document.createElement('div');
+    bar.style.cssText = `width:3px;height:${h}px;border-radius:2px;background:linear-gradient(180deg,#A855F7,#22D3EE);animation:nsPulse ${dur}s ease-in-out ${delay}s infinite`;
+    wrap.appendChild(bar);
+  }
 }
 
-// ── Toasts ────────────────────────────────────────────────────────────
-function showToast(msg, type = 'info') {
-  const container = document.getElementById('toast-container');
-  const el = document.createElement('div');
-  el.className = `toast toast-${type}`;
-  el.textContent = msg;
-  container.appendChild(el);
-  setTimeout(() => el.remove(), 3000);
+function runProcessingAnim() {
+  state.phase = 'processing';
+  document.getElementById('procRim').style.opacity = 1;
+  document.getElementById('tsIdle').style.display = 'none';
+  document.getElementById('tsLive').style.display = 'none';
+  document.getElementById('tsProc').style.display = 'flex';
+  document.getElementById('tsStatus').textContent = 'streaming…';
+  document.getElementById('sumIdle').style.display = 'none';
+  document.getElementById('sumLive').style.display = 'none';
+  document.getElementById('sumProc').style.display = 'flex';
+  document.getElementById('sumBadge').style.display = 'grid';
+  document.getElementById('lensLabel').style.display = 'none';
+  document.getElementById('progressBar').style.width = '6%';
+
+  const msgs = ['fetching transcript…', 'parsing segments…', 'slicing into lines…', 'groq · llama-3.3-70b compressing…'];
+  let i = 0;
+  clearInterval(_procMsgTimer);
+  document.getElementById('procMsg').textContent = '▮ ' + msgs[0];
+  _procMsgTimer = setInterval(() => {
+    i = (i + 1) % msgs.length;
+    document.getElementById('procMsg').textContent = '▮ ' + msgs[i];
+  }, 850);
 }
 
-// Enter key submits
-document.addEventListener('DOMContentLoaded', () => {
-  document.getElementById('url-input-general').addEventListener('keydown', e => {
-    if (e.key === 'Enter') doSummarize('general', false);
+async function doFetch(req) {
+  try {
+    const res = await fetch(`${API}/api/summarize`, {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({url: req.url, brief: req.brief, mode: req.mode}),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || 'Unknown error');
+    goLive(data);
+    refreshQuota();
+    loadHistory();
+  } catch (e) {
+    clearInterval(_procMsgTimer);
+    showToast(e.message.slice(0, 120));
+    resetHero();
+    refreshQuota();
+  }
+}
+
+function goLive(data) {
+  clearInterval(_procMsgTimer);
+  state.phase = 'live';
+  state.videoId = data.video_id || '';
+  state.title = data.title || data.url || 'Untitled';
+  state.thumbnailUrl = data.thumbnail_url || '';
+  state.notes = data.notes || '';
+  state.lines = data.lines || [];
+  state.activeIdx = 0;
+  state.playing = true;
+  state.highlightIdx = null;
+  state.currentId = data.id || null;
+  state.sumStage = 'para';
+  state.exportOpen = false;
+  closeDrawer(true);
+
+  document.getElementById('procRim').style.opacity = 0;
+  document.getElementById('videoTitleLine').textContent =
+    `${state.title}${state.lines.length ? ' · ' + fmtTc(state.lines[state.lines.length - 1].start) : ''}`;
+  if (state.thumbnailUrl) {
+    const img = document.getElementById('thumbImg');
+    img.src = state.thumbnailUrl;
+    img.onload = () => { img.style.opacity = 1; };
+  }
+  document.getElementById('heroStatus').textContent = 'playing · synced';
+
+  renderTranscript();
+  renderSummary();
+  applyLensUI();
+  startPlayback();
+}
+
+function startPlayback() {
+  clearTimeout(_playTimer);
+  const step = () => {
+    if (!state.playing || state.phase !== 'live' || !state.lines.length) return;
+    const cur = state.lines[state.activeIdx];
+    const next = state.lines[(state.activeIdx + 1) % state.lines.length];
+    const delta = state.activeIdx < state.lines.length - 1
+      ? Math.min(4200, Math.max(1200, (next.start - cur.start) * 1000))
+      : 1800;
+    _playTimer = setTimeout(() => {
+      state.activeIdx = (state.activeIdx + 1) % state.lines.length;
+      renderTranscript();
+      document.getElementById('playTc').textContent = fmtTc(state.lines[state.activeIdx].start);
+      document.getElementById('progressBar').style.width = Math.round(((state.activeIdx + 1) / state.lines.length) * 100) + '%';
+      step();
+    }, delta);
+  };
+  if (state.lines.length) document.getElementById('playTc').textContent = fmtTc(state.lines[0].start);
+  step();
+}
+
+function resetHero() {
+  clearTimeout(_playTimer);
+  clearInterval(_procMsgTimer);
+  state.phase = 'ready';
+  state.playing = false;
+  state.highlightIdx = null;
+  state.currentId = null;
+  document.getElementById('inputLayer').style.opacity = 1;
+  document.getElementById('inputLayer').style.transform = 'scale(1)';
+  document.getElementById('inputLayer').style.pointerEvents = 'auto';
+  document.getElementById('cardLayer').style.opacity = 0;
+  document.getElementById('cardLayer').style.transform = 'scaleX(.55)';
+  document.getElementById('cardLayer').style.pointerEvents = 'none';
+  document.getElementById('procRim').style.opacity = 0;
+  document.getElementById('urlInput').value = '';
+  document.getElementById('progressBar').style.width = '0%';
+  document.getElementById('tsIdle').style.display = 'grid';
+  document.getElementById('tsProc').style.display = 'none';
+  document.getElementById('tsLive').style.display = 'none';
+  document.getElementById('tsStatus').textContent = 'idle';
+  document.getElementById('sumIdle').style.display = 'grid';
+  document.getElementById('sumProc').style.display = 'none';
+  document.getElementById('sumLive').style.display = 'none';
+  document.getElementById('sumBadge').style.display = 'none';
+  document.getElementById('lensLabel').style.display = 'none';
+  closeDrawer(true);
+}
+
+// ── Transcript rendering ──────────────────────────────────────────────
+function renderTranscript() {
+  document.getElementById('tsProc').style.display = 'none';
+  document.getElementById('tsIdle').style.display = 'none';
+  document.getElementById('tsLive').style.display = 'flex';
+  document.getElementById('tsStatus').textContent = '⟲ spring-follow';
+
+  const wrap = document.getElementById('tsScroll');
+  if (!wrap.childElementCount) {
+    state.lines.forEach((line, i) => {
+      const el = document.createElement('div');
+      el.dataset.idx = i;
+      el.style.cssText = 'position:relative;border-radius:13px;padding:11px 14px 13px;cursor:pointer;transition:all .5s cubic-bezier(.2,1.3,.35,1)';
+      el.innerHTML = `<span class="tc-span" style="font-family:'JetBrains Mono',monospace;font-size:10.5px;margin-right:10px">${fmtTc(line.start)}</span><span class="text-span">${escapeHtml(line.text)}</span>`;
+      el.onclick = (e) => highlightLine(i, e);
+      wrap.appendChild(el);
+    });
+  }
+  [...wrap.children].forEach((el, i) => {
+    const active = i === state.activeIdx;
+    const hi = i === state.highlightIdx;
+    el.style.background = hi ? 'linear-gradient(120deg,rgba(168,85,247,.3),rgba(34,211,238,.22))' : active ? 'linear-gradient(120deg,rgba(124,58,237,.22),rgba(34,211,238,.16))' : 'rgba(255,255,255,.015)';
+    el.style.border = '1px solid ' + (hi ? 'rgba(168,85,247,.5)' : active ? 'rgba(103,232,249,.35)' : 'rgba(255,255,255,.04)');
+    el.style.color = (active || hi) ? '#F1EEFB' : 'rgba(230,225,245,.42)';
+    el.style.transform = hi ? 'scale(1.05)' : active ? 'scale(1.02)' : 'scale(1)';
+    el.style.fontWeight = (active || hi) ? '500' : '400';
+    el.querySelector('.tc-span').style.color = (active || hi) ? '#67E8F9' : 'rgba(230,225,245,.28)';
   });
-  document.getElementById('url-input-financial').addEventListener('keydown', e => {
-    if (e.key === 'Enter') doSummarize('financial', false);
+  const activeEl = wrap.children[state.activeIdx];
+  if (activeEl) springScrollTo(wrap, Math.max(0, activeEl.offsetTop - wrap.clientHeight / 2 + activeEl.offsetHeight / 2));
+}
+
+let _scrollRaf = null, _scrollV = 0;
+function springScrollTo(el, target) {
+  cancelAnimationFrame(_scrollRaf);
+  target = Math.min(target, el.scrollHeight - el.clientHeight);
+  let pos = el.scrollTop, last = performance.now();
+  const k = 110, d = 15;
+  const step = (now) => {
+    const dt = Math.min(0.032, (now - last) / 1000); last = now;
+    _scrollV += (k * (target - pos) - d * _scrollV) * dt;
+    pos += _scrollV * dt;
+    el.scrollTop = pos;
+    if (Math.abs(target - pos) < 0.5 && Math.abs(_scrollV) < 2) { el.scrollTop = target; _scrollV = 0; return; }
+    _scrollRaf = requestAnimationFrame(step);
+  };
+  _scrollRaf = requestAnimationFrame(step);
+}
+
+function highlightLine(i, e) {
+  if (state.phase !== 'live') return;
+  state.highlightIdx = i;
+  state.playing = false;
+  renderTranscript();
+  openDrawer(state.lines[i]);
+}
+
+function openDrawer(line) {
+  document.getElementById('drawerTc').textContent = fmtTc(line.start);
+  document.getElementById('drawerQuote').textContent = '“' + line.text + '”';
+  document.getElementById('saveNoteBtn').textContent = 'Save note';
+  document.getElementById('drawer').style.transform = 'translateX(0)';
+}
+function closeDrawer(silent) {
+  document.getElementById('drawer').style.transform = 'translateX(calc(100% + 40px))';
+  if (!silent && state.phase === 'live') {
+    state.highlightIdx = null;
+    state.playing = true;
+    renderTranscript();
+    startPlayback();
+  } else {
+    state.highlightIdx = null;
+  }
+}
+
+// ── Summary rendering ─────────────────────────────────────────────────
+function renderSummary() {
+  document.getElementById('sumProc').style.display = 'none';
+  document.getElementById('sumIdle').style.display = 'none';
+  document.getElementById('sumLive').style.display = 'flex';
+  document.getElementById('sumBadge').style.display = 'none';
+  document.getElementById('lensLabel').style.display = 'inline';
+  document.getElementById('lensLabel').textContent = state.mode === 'stock' ? 'financial lens' : 'general lens';
+
+  const { paragraph, bullets } = parseNotes(state.notes);
+  const para = document.getElementById('sumPara');
+  const bulletsWrap = document.getElementById('sumBullets');
+  const compressBtn = document.getElementById('compressBtn');
+
+  if (state.sumStage === 'para') {
+    para.style.display = 'block';
+    para.textContent = paragraph || state.notes.slice(0, 300);
+    compressBtn.style.display = 'block';
+    bulletsWrap.style.display = 'none';
+  } else {
+    para.style.display = 'none';
+    compressBtn.style.display = 'none';
+    bulletsWrap.style.display = 'flex';
+    bulletsWrap.innerHTML = '';
+    (bullets.length ? bullets.slice(0, 6) : [paragraph]).forEach((b, i) => {
+      const el = document.createElement('div');
+      el.style.cssText = 'display:flex;gap:10px;padding:10px 13px;border-radius:12px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.08)';
+      const color = i % 2 === 0 ? '#67E8F9' : '#A855F7';
+      el.innerHTML = `<span style="color:${color};flex:none">◆</span><span>${escapeHtml(b)}</span>`;
+      bulletsWrap.appendChild(el);
+    });
+  }
+}
+
+document.getElementById('compressBtn').onclick = () => {
+  if (state.sumStage !== 'para') return;
+  state.sumStage = 'bullets';
+  renderSummary();
+};
+
+// ── Export / copy ─────────────────────────────────────────────────────
+function summaryText() {
+  return `In a nutshell — ${state.title}\n\n${state.notes}`;
+}
+function downloadMarkdown() {
+  const blob = new Blob([summaryText()], {type: 'text/markdown'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `nutshell-${state.videoId || 'summary'}.md`;
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+function copyText(txt) {
+  try { navigator.clipboard && navigator.clipboard.writeText(txt).catch(() => {}); } catch (_) {}
+}
+
+const EXPORT_ITEMS = [
+  { icon: '⧉', label: 'Copy as text', action: () => { copyText(summaryText()); showToast('Summary copied to clipboard'); } },
+  { icon: 'M↓', label: 'Markdown file', action: () => { downloadMarkdown(); showToast('Markdown exported ✓'); } },
+  { icon: '▤', label: 'PDF one-pager', action: () => { window.print(); showToast('Opening print dialog…'); } },
+  { icon: '↗', label: 'Share link', action: () => {
+      const link = state.currentId ? `${location.origin}/?summary=${state.currentId}` : location.href;
+      copyText(link); showToast('Share link copied ✓');
+    } },
+];
+function renderExportMenu() {
+  const menu = document.getElementById('exportMenu');
+  menu.innerHTML = '';
+  EXPORT_ITEMS.forEach(it => {
+    const el = document.createElement('div');
+    el.style.cssText = 'display:flex;align-items:center;gap:10px;padding:9px 11px;border-radius:10px;font-size:12.5px;color:rgba(230,225,245,.85);cursor:pointer;transition:background .15s';
+    el.onmouseenter = () => el.style.background = 'rgba(255,255,255,.08)';
+    el.onmouseleave = () => el.style.background = 'transparent';
+    el.innerHTML = `<span style="color:#67E8F9;font-size:13px;width:16px;text-align:center">${it.icon}</span>${it.label}`;
+    el.onclick = () => { it.action(); toggleExportMenu(false); };
+    menu.appendChild(el);
   });
-  init();
+}
+function toggleExportMenu(open) {
+  state.exportOpen = open;
+  const menu = document.getElementById('exportMenu');
+  menu.style.opacity = open ? 1 : 0;
+  menu.style.transform = open ? 'translateY(0) scale(1)' : 'translateY(16px) scale(.9)';
+  menu.style.pointerEvents = open ? 'auto' : 'none';
+  document.getElementById('exportBtn').textContent = open ? 'Close ▴' : 'Export ▾';
+}
+renderExportMenu();
+document.getElementById('exportBtn').onclick = () => toggleExportMenu(!state.exportOpen);
+document.getElementById('copyBtn').onclick = () => {
+  copyText(summaryText());
+  const btn = document.getElementById('copyBtn');
+  btn.textContent = 'Copied ✓';
+  setTimeout(() => { btn.textContent = 'Copy'; }, 1400);
+};
+
+// ── Lens toggle ────────────────────────────────────────────────────────
+function applyLensUI() {
+  const isGeneral = state.mode !== 'stock';
+  document.getElementById('lensKnob').style.transform = isGeneral ? 'translateX(0)' : 'translateX(calc(100% + 8px))';
+  document.getElementById('lensGeneral').style.color = isGeneral ? '#fff' : 'rgba(230,225,245,.5)';
+  document.getElementById('lensFinancial').style.color = !isGeneral ? '#fff' : 'rgba(230,225,245,.5)';
+}
+function setLens(mode) {
+  if (state.mode === mode) return;
+  state.mode = mode;
+  applyLensUI();
+  if (state.phase === 'live' && _lastRequest) {
+    // Re-summarize with the new lens, reusing the cached transcript (fast, no re-fetch).
+    _lastRequest = { ..._lastRequest, mode };
+    state.sumStage = 'para';
+    document.getElementById('sumLive').style.display = 'none';
+    document.getElementById('sumProc').style.display = 'flex';
+    document.getElementById('sumBadge').style.display = 'grid';
+    doFetch(_lastRequest);
+  }
+}
+document.getElementById('lensGeneral').onclick = () => setLens('general');
+document.getElementById('lensFinancial').onclick = () => setLens('stock');
+
+// ── Wire up top-level controls ────────────────────────────────────────
+document.getElementById('crackBtn').onclick = () => startSummarize(document.getElementById('urlInput').value, state.mode);
+document.getElementById('urlInput').addEventListener('keydown', e => {
+  if (e.key === 'Enter') startSummarize(e.target.value, state.mode);
 });
+document.getElementById('resetBtn').onclick = () => resetHero();
+document.getElementById('drawerClose').onclick = () => closeDrawer(false);
+document.getElementById('drawerDismiss').onclick = () => closeDrawer(false);
+document.getElementById('saveNoteBtn').onclick = () => {
+  document.getElementById('saveNoteBtn').textContent = 'Saved ✓';
+  showToast('Note saved to this shell');
+};
+
+// ── Deep link ─────────────────────────────────────────────────────────
+(async function handleDeepLink() {
+  const params = new URLSearchParams(location.search);
+  if (!params.has('summary')) return;
+  try {
+    const data = await fetch(`${API}/api/summaries/${params.get('summary')}`).then(r => r.json());
+    state.mode = (data.mode || 'general') === 'stock' ? 'stock' : 'general';
+    _lastRequest = { url: data.url, mode: state.mode, brief: false };
+    setTimeout(() => { morphToCard(); goLive(data); }, 2200);
+  } catch (_) {}
+})();
+
+runIntro();
 </script>
 </body>
 </html>

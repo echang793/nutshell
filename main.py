@@ -105,7 +105,7 @@ async def api_summarize(req: SummarizeRequest):
         raise HTTPException(400, f"Could not parse a video ID from: {req.url}")
 
     try:
-        transcript, cached = await run_in_threadpool(
+        transcript, cached, lines = await run_in_threadpool(
             summarizer.fetch_transcript, video_id, api_key, req.model,
             db.record_groq_usage, db.set_groq_usage_today
         )
@@ -146,6 +146,7 @@ async def api_summarize(req: SummarizeRequest):
         "mode":          mode,
         "groq_used":     groq_used,
         "groq_limit":    GROQ_DAILY_LIMIT,
+        "lines":         lines,
     }
 
 
@@ -154,7 +155,21 @@ def api_get_summary(sid: str):
     row = db.get_summary(sid)
     if not row:
         raise HTTPException(404, "Summary not found.")
+    row["lines"] = _cached_lines(row.get("video_id", ""))
     return row
+
+
+def _cached_lines(video_id: str) -> list[dict]:
+    """Best-effort: reuse the on-disk transcript cache for a video's timestamped
+    lines without re-fetching or re-summarizing. Empty list if not cached."""
+    import json
+    cache = summarizer.CACHE_DIR / f"{video_id}.json"
+    if not cache.exists():
+        return []
+    try:
+        return json.loads(cache.read_text()).get("lines", [])
+    except Exception:
+        return []
 
 
 @app.delete("/api/summaries/{sid}")
@@ -219,7 +234,7 @@ async def api_summarize_playlist(req: PlaylistRequest):
         for i, vid in enumerate(video_ids):
             vid_url = f"https://www.youtube.com/watch?v={vid}"
             try:
-                transcript, cached = await run_in_threadpool(
+                transcript, cached, _lines = await run_in_threadpool(
                     summarizer.fetch_transcript, vid, api_key, req.model,
                     db.record_groq_usage, db.set_groq_usage_today
                 )
