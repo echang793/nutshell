@@ -179,6 +179,11 @@ def get_history(limit: int = 50) -> list[dict]:
     return [_row_to_dict(r) for r in rows]
 
 
+def delete_summary(id: str) -> None:
+    with _conn() as c:
+        c.execute("DELETE FROM summaries WHERE id=?", (id,))
+
+
 def get_monthly_summary_count() -> int:
     month_prefix = datetime.now().strftime("%Y-%m")
     with _conn() as c:

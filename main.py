@@ -132,6 +132,14 @@ def api_get_summary(sid: str):
     return row
 
 
+@app.delete("/api/summaries/{sid}")
+def api_delete_summary(sid: str):
+    if not db.get_summary(sid):
+        raise HTTPException(404, "Summary not found.")
+    db.delete_summary(sid)
+    return {"ok": True}
+
+
 @app.get("/api/history")
 def api_history(limit: int = 50):
     return db.get_history(limit)
