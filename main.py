@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import os
 import uuid
 from pathlib import Path
@@ -104,6 +105,11 @@ async def api_summarize(req: SummarizeRequest):
     if not video_id:
         raise HTTPException(400, f"Could not parse a video ID from: {req.url}")
 
+    # Title lookup only needs the video ID, not the transcript/summary, so run it
+    # concurrently with the transcript+Groq work instead of after — shaves the
+    # oEmbed round-trip off the total wait.
+    title_task = asyncio.create_task(run_in_threadpool(summarizer.fetch_video_title, video_id))
+
     try:
         transcript, cached, lines = await run_in_threadpool(
             summarizer.fetch_transcript, video_id, api_key, req.model,
@@ -123,7 +129,7 @@ async def api_summarize(req: SummarizeRequest):
     except RuntimeError as e:
         raise HTTPException(502, str(e))
 
-    title     = await run_in_threadpool(summarizer.fetch_video_title, video_id)
+    title     = await title_task
     thumb_url = summarizer.thumbnail_url(video_id)
     sid       = str(uuid.uuid4())[:8]
 
