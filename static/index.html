@@ -77,14 +77,30 @@
       </div>
 
       <div id="error-box-general" class="hidden bg-red-950 border border-red-800 text-red-300
-                                          rounded-lg px-4 py-3 text-sm mb-6"></div>
+                                          rounded-lg px-4 py-3 text-sm mb-6">
+        <div class="flex items-center justify-between gap-4">
+          <span id="error-msg-general"></span>
+          <button onclick="retryLast('general')"
+            class="shrink-0 bg-red-900 hover:bg-red-800 text-red-200 px-3 py-1 rounded-lg text-xs">Retry</button>
+        </div>
+      </div>
 
       <div id="result-box-general" class="hidden">
         <div id="result-header-general" class="hidden items-center gap-3 mb-3"></div>
         <div class="bg-slate-900 border border-slate-700 rounded-xl p-6">
           <div id="notes-content-general" class="prose text-sm text-slate-300"></div>
         </div>
-        <p class="text-xs text-slate-600 mt-2" id="result-meta-general"></p>
+        <div class="flex items-center justify-between gap-4 mt-2 flex-wrap">
+          <p class="text-xs text-slate-600" id="result-meta-general"></p>
+          <div class="flex items-center gap-2">
+            <button onclick="copyNotes('general')"
+              class="text-xs text-slate-400 hover:text-sky-400 border border-slate-700 hover:border-sky-700 px-3 py-1 rounded-lg transition">Copy</button>
+            <button onclick="copyShareLink('general')"
+              class="text-xs text-slate-400 hover:text-sky-400 border border-slate-700 hover:border-sky-700 px-3 py-1 rounded-lg transition">Share</button>
+            <button onclick="regenerate('general')"
+              class="text-xs text-slate-400 hover:text-sky-400 border border-slate-700 hover:border-sky-700 px-3 py-1 rounded-lg transition">Regenerate</button>
+          </div>
+        </div>
       </div>
 
       <div id="playlist-box-general" class="hidden">
@@ -128,14 +144,30 @@
       </div>
 
       <div id="error-box-financial" class="hidden bg-red-950 border border-red-800 text-red-300
-                                            rounded-lg px-4 py-3 text-sm mb-6"></div>
+                                            rounded-lg px-4 py-3 text-sm mb-6">
+        <div class="flex items-center justify-between gap-4">
+          <span id="error-msg-financial"></span>
+          <button onclick="retryLast('financial')"
+            class="shrink-0 bg-red-900 hover:bg-red-800 text-red-200 px-3 py-1 rounded-lg text-xs">Retry</button>
+        </div>
+      </div>
 
       <div id="result-box-financial" class="hidden">
         <div id="result-header-financial" class="hidden items-center gap-3 mb-3"></div>
         <div class="bg-slate-900 border border-slate-700 rounded-xl p-6">
           <div id="notes-content-financial" class="prose text-sm text-slate-300"></div>
         </div>
-        <p class="text-xs text-slate-600 mt-2" id="result-meta-financial"></p>
+        <div class="flex items-center justify-between gap-4 mt-2 flex-wrap">
+          <p class="text-xs text-slate-600" id="result-meta-financial"></p>
+          <div class="flex items-center gap-2">
+            <button onclick="copyNotes('financial')"
+              class="text-xs text-slate-400 hover:text-sky-400 border border-slate-700 hover:border-sky-700 px-3 py-1 rounded-lg transition">Copy</button>
+            <button onclick="copyShareLink('financial')"
+              class="text-xs text-slate-400 hover:text-sky-400 border border-slate-700 hover:border-sky-700 px-3 py-1 rounded-lg transition">Share</button>
+            <button onclick="regenerate('financial')"
+              class="text-xs text-slate-400 hover:text-sky-400 border border-slate-700 hover:border-sky-700 px-3 py-1 rounded-lg transition">Regenerate</button>
+          </div>
+        </div>
       </div>
 
       <div id="playlist-box-financial" class="hidden">
@@ -146,6 +178,16 @@
 
     <!-- ── HISTORY TAB ── -->
     <div id="tab-history-content" class="hidden">
+      <div class="flex items-center gap-3 mb-4">
+        <input id="history-search" type="text" placeholder="Search history…"
+          oninput="renderHistory()"
+          class="flex-1 bg-slate-800 border border-slate-600 rounded-lg px-4 py-2 text-sm
+                 focus:outline-none focus:border-sky-500 placeholder-slate-600" />
+        <button onclick="clearAllHistory()"
+          class="shrink-0 text-xs text-slate-500 hover:text-red-400 border border-slate-700 hover:border-red-800 px-3 py-2 rounded-lg transition">
+          Clear All
+        </button>
+      </div>
       <div id="history-list" class="space-y-3"></div>
     </div>
 
@@ -154,6 +196,8 @@
 <script>
 const API = '';
 const MODE_FOR_TAB = { general: 'general', financial: 'stock' };
+let _lastRequest = {};  // tab -> {url, brief}
+let _lastResult  = {};  // tab -> last response data
 
 // ── Bootstrap ─────────────────────────────────────────────────────────
 async function init() {
@@ -173,8 +217,10 @@ async function init() {
   if (params.has('summary')) {
     const data = await fetch(`${API}/api/summaries/${params.get('summary')}`).then(r => r.json()).catch(() => null);
     if (data) {
-      showResult('general', data);
-      document.getElementById('url-input-general').value = data.url;
+      const tab = /## Thesis/.test(data.notes || '') ? 'financial' : 'general';
+      document.getElementById(`url-input-${tab}`).value = data.url;
+      showResult(tab, data);
+      showTab(tab);
     }
   }
 }
@@ -204,6 +250,7 @@ async function doSummarize(tab, brief) {
   const url = document.getElementById(`url-input-${tab}`).value.trim();
   if (!url) return;
   const mode = MODE_FOR_TAB[tab];
+  _lastRequest[tab] = {url, brief};
 
   setSpinner(tab, true, brief ? 'Generating brief summary...' : 'Fetching transcript...');
   hideError(tab);
@@ -223,6 +270,37 @@ async function doSummarize(tab, brief) {
   } finally {
     setSpinner(tab, false);
   }
+}
+
+function retryLast(tab) {
+  const req = _lastRequest[tab];
+  if (!req) return;
+  document.getElementById(`url-input-${tab}`).value = req.url;
+  doSummarize(tab, req.brief);
+}
+
+function regenerate(tab) {
+  const req = _lastRequest[tab];
+  if (!req) return;
+  document.getElementById(`url-input-${tab}`).value = req.url;
+  doSummarize(tab, !req.brief);
+}
+
+async function copyNotes(tab) {
+  const data = _lastResult[tab];
+  if (!data) return;
+  try {
+    await navigator.clipboard.writeText(data.notes || '');
+  } catch(e) { alert('Could not copy: ' + e.message); }
+}
+
+async function copyShareLink(tab) {
+  const data = _lastResult[tab];
+  if (!data) return;
+  const link = `${location.origin}/?summary=${data.id}`;
+  try {
+    await navigator.clipboard.writeText(link);
+  } catch(e) { alert('Could not copy: ' + e.message); }
 }
 
 // ── URL input detection ───────────────────────────────────────────────
@@ -331,6 +409,8 @@ function escapeHtml(s) {
 }
 
 function showResult(tab, data) {
+  _lastResult[tab] = data;
+  if (!_lastRequest[tab]) _lastRequest[tab] = {url: data.url, brief: data.brief};
   const header = document.getElementById(`result-header-${tab}`);
   if (data.thumbnail_url || data.title) {
     header.innerHTML = `
@@ -350,48 +430,80 @@ function showResult(tab, data) {
 
 // ── History ───────────────────────────────────────────────────────────
 let _historyNotes = {};
+let _historyRows  = [];
 
 async function loadHistory() {
   const list = document.getElementById('history-list');
   list.innerHTML = '<p class="text-slate-600 text-sm">Loading...</p>';
   try {
-    const rows = await fetch(`${API}/api/history`).then(r => r.json());
-    if (!rows.length) {
-      list.innerHTML = '<p class="text-slate-600 text-sm">No summaries yet.</p>';
-      return;
-    }
-    _historyNotes = {};
-    list.innerHTML = rows.map(r => {
-      _historyNotes[r.id] = r.notes || '';
-      const thesis = extractThesis(r.notes);
-      const date   = r.created_at.slice(0,16).replace('T',' ');
-      return `
-        <div class="bg-slate-900 border border-slate-700 rounded-xl p-4" id="history-item-${r.id}">
-          <div class="flex items-start justify-between gap-4 cursor-pointer hover:opacity-90"
-               onclick="toggleHistoryItem('${r.id}')">
-            <div class="flex items-start gap-3 min-w-0">
-              ${_thumbHtml(r.thumbnail_url)}
-              <div class="min-w-0">
-                ${r.title ? `<p class="text-sm text-slate-200 font-medium truncate">${escapeHtml(r.title)}</p>` : ''}
-                <p class="text-xs text-slate-500 mb-1">${date} · ${r.brief ? 'brief' : 'full'} · ${r.word_count?.toLocaleString()} words</p>
-                <p class="text-sm text-slate-200">${thesis}</p>
-                <p class="text-xs text-slate-600 mt-1 truncate max-w-lg">${r.url}</p>
-              </div>
-            </div>
-            <div class="flex items-center gap-3 shrink-0">
-              <span class="text-xs text-slate-600">${r.id}</span>
-              <button onclick="event.stopPropagation(); deleteHistoryItem('${r.id}')"
-                title="Delete"
-                class="text-slate-600 hover:text-red-400 hover:bg-red-950/40 text-xs px-2 py-1 rounded transition">
-                &times;
-              </button>
-            </div>
-          </div>
-          <div id="history-notes-${r.id}" class="hidden prose text-sm text-slate-300 mt-4 pt-4 border-t border-slate-800"></div>
-        </div>`;
-    }).join('');
+    _historyRows = await fetch(`${API}/api/history`).then(r => r.json());
+    renderHistory();
   } catch(e) {
     list.innerHTML = `<p class="text-red-400 text-sm">${e.message}</p>`;
+  }
+}
+
+function renderHistory() {
+  const list  = document.getElementById('history-list');
+  const query = (document.getElementById('history-search')?.value || '').trim().toLowerCase();
+  const rows  = query
+    ? _historyRows.filter(r =>
+        (r.title || '').toLowerCase().includes(query) ||
+        (r.notes || '').toLowerCase().includes(query) ||
+        (r.url   || '').toLowerCase().includes(query))
+    : _historyRows;
+
+  if (!_historyRows.length) {
+    list.innerHTML = '<p class="text-slate-600 text-sm">No summaries yet.</p>';
+    return;
+  }
+  if (!rows.length) {
+    list.innerHTML = '<p class="text-slate-600 text-sm">No matches.</p>';
+    return;
+  }
+
+  _historyNotes = {};
+  list.innerHTML = rows.map(r => {
+    _historyNotes[r.id] = r.notes || '';
+    const thesis = extractThesis(r.notes);
+    const date   = r.created_at.slice(0,16).replace('T',' ');
+    return `
+      <div class="bg-slate-900 border border-slate-700 rounded-xl p-4" id="history-item-${r.id}">
+        <div class="flex items-start justify-between gap-4 cursor-pointer hover:opacity-90"
+             onclick="toggleHistoryItem('${r.id}')">
+          <div class="flex items-start gap-3 min-w-0">
+            ${_thumbHtml(r.thumbnail_url)}
+            <div class="min-w-0">
+              ${r.title ? `<p class="text-sm text-slate-200 font-medium truncate">${escapeHtml(r.title)}</p>` : ''}
+              <p class="text-xs text-slate-500 mb-1">${date} · ${r.brief ? 'brief' : 'full'} · ${r.word_count?.toLocaleString()} words</p>
+              <p class="text-sm text-slate-200">${thesis}</p>
+              <p class="text-xs text-slate-600 mt-1 truncate max-w-lg">${r.url}</p>
+            </div>
+          </div>
+          <div class="flex items-center gap-3 shrink-0">
+            <span class="text-xs text-slate-600">${r.id}</span>
+            <button onclick="event.stopPropagation(); deleteHistoryItem('${r.id}')"
+              title="Delete"
+              class="text-slate-600 hover:text-red-400 hover:bg-red-950/40 text-xs px-2 py-1 rounded transition">
+              &times;
+            </button>
+          </div>
+        </div>
+        <div id="history-notes-${r.id}" class="hidden prose text-sm text-slate-300 mt-4 pt-4 border-t border-slate-800"></div>
+      </div>`;
+  }).join('');
+}
+
+async function clearAllHistory() {
+  if (!_historyRows.length) return;
+  if (!confirm(`Delete all ${_historyRows.length} history entries? This can't be undone.`)) return;
+  try {
+    await fetch(`${API}/api/history`, {method: 'DELETE'});
+    _historyRows = [];
+    _historyNotes = {};
+    renderHistory();
+  } catch(e) {
+    alert(e.message);
   }
 }
 
@@ -410,6 +522,7 @@ async function deleteHistoryItem(id) {
   try {
     await fetch(`${API}/api/summaries/${id}`, {method: 'DELETE'});
     delete _historyNotes[id];
+    _historyRows = _historyRows.filter(r => r.id !== id);
     const el = document.getElementById(`history-item-${id}`);
     if (el) el.remove();
     const list = document.getElementById('history-list');
@@ -436,9 +549,8 @@ function setSpinner(tab, on, msg = '') {
 }
 
 function showError(tab, msg) {
-  const el = document.getElementById(`error-box-${tab}`);
-  el.textContent = msg;
-  el.classList.remove('hidden');
+  document.getElementById(`error-msg-${tab}`).textContent = msg;
+  document.getElementById(`error-box-${tab}`).classList.remove('hidden');
 }
 
 function hideError(tab) {

@@ -186,6 +186,11 @@ def delete_summary(id: str) -> None:
         c.execute("DELETE FROM summaries WHERE id=?", (id,))
 
 
+def clear_history() -> None:
+    with _conn() as c:
+        c.execute("DELETE FROM summaries")
+
+
 def get_monthly_summary_count() -> int:
     month_prefix = datetime.now().strftime("%Y-%m")
     with _conn() as c:

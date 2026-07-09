@@ -150,6 +150,12 @@ def api_history(limit: int = 50):
     return db.get_history(limit)
 
 
+@app.delete("/api/history")
+def api_clear_history():
+    db.clear_history()
+    return {"ok": True}
+
+
 # ── Playlist ──────────────────────────────────────────────────────────
 
 class PlaylistRequest(BaseModel):
