@@ -8,9 +8,9 @@ from pathlib import Path
 
 import json as _json
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.concurrency import run_in_threadpool
-from fastapi.responses import FileResponse, StreamingResponse
+from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
@@ -22,6 +22,12 @@ app = FastAPI(title="Nutshell")
 STATIC_DIR  = Path(__file__).parent / "static"
 CONFIG_PATH = Path.home() / ".yt-notes.json"
 app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
+
+
+@app.exception_handler(Exception)
+async def unhandled_exception_handler(request: Request, exc: Exception):
+    """Guarantee JSON error bodies — a raw plain-text 500 breaks res.json() client-side."""
+    return JSONResponse(status_code=500, content={"detail": f"{type(exc).__name__}: {exc}"})
 
 
 def _get_api_key() -> str:

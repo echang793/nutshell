@@ -32,6 +32,24 @@ _SCHEMA_STMTS = [
     "CREATE INDEX IF NOT EXISTS idx_video   ON summaries(video_id)",
 ]
 
+# Additive migrations for columns added after the table first existed in prod.
+# CREATE TABLE IF NOT EXISTS never alters an existing table, so these run every
+# connection and no-op (duplicate-column error, swallowed) once already applied.
+_MIGRATION_COLUMNS = [
+    ("title",         "TEXT NOT NULL DEFAULT ''"),
+    ("thumbnail_url", "TEXT NOT NULL DEFAULT ''"),
+    ("mode",          "TEXT NOT NULL DEFAULT 'general'"),
+    ("pinned",        "INTEGER NOT NULL DEFAULT 0"),
+]
+
+
+def _run_migrations(conn) -> None:
+    for col, ddl in _MIGRATION_COLUMNS:
+        try:
+            conn.execute(f"ALTER TABLE summaries ADD COLUMN {col} {ddl}")
+        except Exception:
+            pass  # column already exists
+
 
 # ── Turso HTTP client ──────────────────────────────────────────────────
 
@@ -132,6 +150,7 @@ def _conn():
                     conn = _TursoConn(turso_url, turso_token)
                     for stmt in _SCHEMA_STMTS:
                         conn.execute(stmt)
+                    _run_migrations(conn)
                     _turso = conn
         return _turso
 
@@ -141,6 +160,7 @@ def _conn():
     inner.row_factory = sqlite3.Row
     for stmt in _SCHEMA_STMTS:
         inner.execute(stmt)
+    _run_migrations(inner)
     inner.commit()
     return inner
 
