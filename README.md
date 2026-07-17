@@ -2,7 +2,7 @@
 
 AI-powered YouTube video summarizer. Paste a video URL and get structured notes in seconds. Two modes: **General** (overview, key points, notable quotes, takeaways — for any video) and **Financial** (thesis, tickers, price levels, catalysts, risks — for trading/investing videos). Free and unlimited, no account required.
 
-Runs locally at: http://localhost:8000 — see [Local hosting](#local-hosting) below.
+Runs locally at: http://localhost:8090 — see [Local hosting](#local-hosting) below.
 
 ---
 
@@ -50,7 +50,7 @@ pip3 install -r requirements.txt
 
 ### Run as an always-on background service (recommended)
 
-A LaunchAgent keeps Nutshell running at **http://localhost:8000**, starts it on login, and restarts it automatically if it crashes. Template lives at `deploy/com.erichang.nutshell.plist`:
+A LaunchAgent keeps Nutshell running at **http://localhost:8090**, starts it on login, and restarts it automatically if it crashes. Template lives at `deploy/com.erichang.nutshell.plist`:
 
 ```bash
 cp deploy/com.erichang.nutshell.plist ~/Library/LaunchAgents/
@@ -72,7 +72,7 @@ launchctl kickstart -k gui/$(id -u)/com.erichang.nutshell
 ### Run manually instead
 
 ```bash
-uvicorn main:app --host 127.0.0.1 --port 8000 --reload
+uvicorn main:app --host 127.0.0.1 --port 8090 --reload
 ```
 
 ---
