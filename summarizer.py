@@ -36,10 +36,12 @@ Analyze this YouTube video transcript and write a single, detailed summary of it
 TRANSCRIPT:
 {transcript}
 
-Write one well-organized summary, as flowing prose (no headers, no bullet points, no numbered \
-lists) that covers: what the video is about, the main ideas and arguments in the order they're \
-presented, and the key takeaway. Aim for a thorough paragraph or two — detailed enough that \
-someone who hasn't watched the video understands the substance of it, not just the topic.\
+Write a well-organized summary as flowing prose — no headers, no bullet points, no numbered \
+lists. Break it into 2-4 distinct paragraphs, each separated by a blank line, grouped either \
+chronologically (as the video progresses) or by topic/theme, whichever reads more naturally for \
+this content. Cover what the video is about, the main ideas and arguments, and the key takeaway. \
+Detailed enough that someone who hasn't watched the video understands the substance of it, not \
+just the topic.\
 """
 
 _BRIEF_PROMPT = """\
@@ -58,11 +60,13 @@ Analyze this YouTube video transcript and write a single, detailed trading-focus
 TRANSCRIPT:
 {transcript}
 
-Write one well-organized summary, as flowing prose (no headers, no bullet points, no numbered \
-lists) that covers: the core investment or trading thesis, any stocks/tickers mentioned and the \
-sentiment on each, specific price levels or targets if any were given, catalysts and time \
+Write a well-organized summary as flowing prose — no headers, no bullet points, no numbered \
+lists. Break it into 2-4 distinct paragraphs, each separated by a blank line, grouped by topic \
+(e.g. thesis, tickers/price levels, catalysts and risks) or chronologically, whichever reads \
+more naturally. Cover: the core investment or trading thesis, any stocks/tickers mentioned and \
+the sentiment on each, specific price levels or targets if any were given, catalysts and time \
 horizon, and key risks. If tickers or price levels weren't mentioned, just say so in passing \
-rather than listing an empty section. Aim for a thorough paragraph or two.\
+rather than listing an empty section.\
 """
 
 _STOCK_BRIEF_PROMPT = """\

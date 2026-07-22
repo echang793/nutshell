@@ -310,24 +310,30 @@ function fmtTc(sec) {
   return `${m}:${String(s).padStart(2, '0')}`;
 }
 function parseNotes(md) {
-  const lines = (md || '').split('\n');
-  const paraLines = [];
+  const rawLines = (md || '').split('\n');
+  const paragraphs = [];
   const bullets = [];
+  let current = [];
   let sawBullet = false;
   // Markdown bullets can be "-", "•", or "*" (but not "**bold**" at line start).
   const isBullet = (line) => /^[-•]\s+/.test(line) || /^\*(?!\*)\s+/.test(line);
-  for (const raw of lines) {
+  const flush = () => {
+    if (current.length) { paragraphs.push(current.join(' ')); current = []; }
+  };
+  for (const raw of rawLines) {
     const line = raw.trim();
-    if (!line || line.startsWith('#')) continue;
+    if (!line || line.startsWith('#')) { flush(); continue; }
     if (isBullet(line)) {
       sawBullet = true;
+      flush();
       let text = line.replace(/^[-•*]\s*/, '').replace(/\*\*/g, '');
       bullets.push(text);
     } else if (!sawBullet) {
-      paraLines.push(line);
+      current.push(line);
     }
   }
-  return { paragraph: paraLines.join(' '), bullets };
+  flush();
+  return { paragraphs, bullets };
 }
 
 // ── Hero: URL submit / morph ─────────────────────────────────────────
@@ -448,11 +454,17 @@ function renderSummary() {
   document.getElementById('lensLabel').style.display = 'inline';
   document.getElementById('lensLabel').textContent = state.mode === 'stock' ? 'financial lens' : 'general lens';
 
-  const { paragraph, bullets } = parseNotes(state.notes);
+  const { paragraphs, bullets } = parseNotes(state.notes);
   const para = document.getElementById('sumPara');
   const bulletsWrap = document.getElementById('sumBullets');
 
-  para.textContent = paragraph || state.notes || '';
+  para.innerHTML = '';
+  (paragraphs.length ? paragraphs : [state.notes || '']).forEach(p => {
+    const el = document.createElement('p');
+    el.style.margin = '0 0 12px';
+    el.textContent = p;
+    para.appendChild(el);
+  });
   bulletsWrap.innerHTML = '';
   bulletsWrap.style.display = bullets.length ? 'flex' : 'none';
   bullets.forEach((b, i) => {
