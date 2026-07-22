@@ -16,115 +16,63 @@ GROQ_MODEL = "llama-3.3-70b-versatile"
 MAX_TRANSCRIPT_CHARS = 18_000
 
 _SYSTEM_PROMPT = (
-    "You are an expert note-taker and summarizer for YouTube video transcripts of any kind — "
+    "You are an expert summarizer for YouTube video transcripts of any kind — "
     "tutorials, lectures, podcasts, interviews, reviews, vlogs, and more. "
-    "Extract and organize the key information into clear, accurate notes. "
+    "Write clear, accurate, detailed prose summaries. "
     "Never invent information that is not in the transcript. "
-    "Format your response in clean markdown."
+    "Never use headers, bullet points, or numbered lists — write in flowing paragraphs only."
 )
 
 _STOCK_SYSTEM_PROMPT = (
-    "You are an expert financial analyst and note-taker specializing in stock trading content. "
-    "Extract and organize key information from YouTube transcripts into clear, actionable notes. "
-    "Be precise with numbers, tickers, and price levels. "
+    "You are an expert financial analyst summarizing stock trading YouTube content. "
+    "Write clear, accurate, detailed prose summaries. Be precise with numbers, tickers, and price levels. "
     "Never invent information that is not in the transcript. "
-    "Format your response in clean markdown."
+    "Never use headers, bullet points, or numbered lists — write in flowing paragraphs only."
 )
 
 _FULL_PROMPT = """\
-Analyze this YouTube video transcript and create structured notes.
+Analyze this YouTube video transcript and write a single, detailed summary of it.
 
 TRANSCRIPT:
 {transcript}
 
-Create notes with these exact sections:
-
-## Overview
-2-3 sentences summarizing what this video is about and who it's for.
-
-## Key Points
-5-10 bullets covering the main ideas, arguments, or steps, in the order presented.
-
-## Notable Quotes
-1-3 direct quotes worth remembering. If none stand out, write "None."
-
-## Topics & Terms
-Important names, tools, concepts, or terminology mentioned.
-
-## Takeaways
-3-5 bullet points of the most useful or actionable things a viewer should remember or do next.\
+Write one well-organized summary, as flowing prose (no headers, no bullet points, no numbered \
+lists) that covers: what the video is about, the main ideas and arguments in the order they're \
+presented, and the key takeaway. Aim for a thorough paragraph or two — detailed enough that \
+someone who hasn't watched the video understands the substance of it, not just the topic.\
 """
 
 _BRIEF_PROMPT = """\
-Analyze this YouTube video transcript and write a very short briefing.
+Analyze this YouTube video transcript and write a short summary of it.
 
 TRANSCRIPT:
 {transcript}
 
-Respond with ONLY these two sections (keep each tight):
-
-## Summary
-1-2 sentences — what this video covers.
-
-## Top Takeaways
-- Bullet 1
-- Bullet 2
-- Bullet 3\
+Write 2-3 sentences of flowing prose (no headers, no bullet points, no lists) covering what the \
+video is about and its main point.\
 """
 
 _STOCK_FULL_PROMPT = """\
-Analyze this YouTube video transcript and create structured trading notes.
+Analyze this YouTube video transcript and write a single, detailed trading-focused summary of it.
 
 TRANSCRIPT:
 {transcript}
 
-Create notes with these exact sections:
-
-## Thesis
-One or two sentences summarizing the core investment or trading idea.
-
-## Stocks & Tickers Mentioned
-List each stock with:
-- **$TICKER — Company Name**: Bullish / Bearish / Neutral — what was said
-
-## Key Price Levels
-Specific prices, targets, support/resistance levels, or moving averages mentioned:
-- $TICKER: [level] — context (e.g. "support at $150", "target $200", "stop below $145")
-If none were mentioned, write "None specified."
-
-## Catalysts & Time Horizon
-- What events or factors are expected to drive the move
-- Timeframe: short-term (days/weeks) / medium-term (months) / long-term
-
-## Risks
-Key risks or concerns mentioned by the presenter.
-
-## Actionable Takeaways
-3–5 bullet points of the most important things to act on or monitor.
-
-## Plain-English Summary
-2–3 sentences summarizing the whole video for someone who hasn't watched it.\
+Write one well-organized summary, as flowing prose (no headers, no bullet points, no numbered \
+lists) that covers: the core investment or trading thesis, any stocks/tickers mentioned and the \
+sentiment on each, specific price levels or targets if any were given, catalysts and time \
+horizon, and key risks. If tickers or price levels weren't mentioned, just say so in passing \
+rather than listing an empty section. Aim for a thorough paragraph or two.\
 """
 
 _STOCK_BRIEF_PROMPT = """\
-Analyze this YouTube video transcript and write a very short trading briefing.
+Analyze this YouTube video transcript and write a short trading-focused summary of it.
 
 TRANSCRIPT:
 {transcript}
 
-Respond with ONLY these three sections (keep each tight):
-
-## Thesis
-One sentence — the core idea.
-
-## Top Takeaways
-- Bullet 1
-- Bullet 2
-- Bullet 3
-
-## Tickers
-Comma-separated list of every stock ticker mentioned, each labeled (bullish/bearish/neutral).
-If none mentioned, write "None."\
+Write 2-3 sentences of flowing prose (no headers, no bullet points, no lists) covering the core \
+trading thesis and any tickers mentioned.\
 """
 
 _TRANSLATE_PROMPT = """\

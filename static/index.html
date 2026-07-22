@@ -452,9 +452,10 @@ function renderSummary() {
   const para = document.getElementById('sumPara');
   const bulletsWrap = document.getElementById('sumBullets');
 
-  para.textContent = paragraph || '';
+  para.textContent = paragraph || state.notes || '';
   bulletsWrap.innerHTML = '';
-  (bullets.length ? bullets : []).forEach((b, i) => {
+  bulletsWrap.style.display = bullets.length ? 'flex' : 'none';
+  bullets.forEach((b, i) => {
     const el = document.createElement('div');
     el.style.cssText = 'display:flex;gap:10px;padding:10px 13px;border-radius:12px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.08)';
     const color = i % 2 === 0 ? '#67E8F9' : '#A855F7';
